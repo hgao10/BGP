@@ -20,7 +20,7 @@ class TestSuite(cmd.Cmd):
 
         self.cmdloop()
 
-    def do_exit(self):
+    def do_exit(self, line=''):
         """exit: Leave the CLI"""
         return True
 
@@ -33,7 +33,7 @@ class TestSuite(cmd.Cmd):
         else:
             print('The supplied topology is not known: %s. Try "simple" for example.' % line)
 
-    def do_run(self):
+    def do_run(self, line=''):
         """run: Run an analysis on the loaded network model by propagating a symbolic announcement"""
         if self.network:
             neighbor = 'in_neighbor'
