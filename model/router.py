@@ -87,10 +87,11 @@ class RouteMapItems(object):
     def apply(self, announcement):
         tmp_announcement = announcement
 
-        # Performing the matches
+        # Applying the matches
         for match in self.matches:
             tmp_announcement = match.apply(tmp_announcement)
 
+        # Applying the actions
         # TODO add actions
 
         return tmp_announcement
@@ -98,12 +99,13 @@ class RouteMapItems(object):
 
 class RouteMapMatch(object):
     def __init__(self, match_type, field, pattern):
+        # TODO better model what the match actually does. For example, we need to distinguish between exact, greater or equal and less or equal prefix matches
         self.type = match_type  # permit or deny
         self.field = field
         self.pattern = pattern
 
     def apply(self, announcement):
-        # TODO add support for both deny and permit
+        # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
         announcement.filter(self.field, self.pattern)
         return announcement
 

@@ -24,6 +24,7 @@ class RouteAnnouncement(object):
     """
 
     def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, debug=False):
+        # TODO model all other fields
         if ip_prefix:
             self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix)
         else:
@@ -54,30 +55,38 @@ class RouteAnnouncement(object):
             self.logger.error('Tried to set unknown field "%sæ with value "%s"' % (field, value))
 
     def set_ip_prefix(self, ip_prefix):
+        # TODO
         pass
 
     def set_next_hop(self, next_hop):
+        # TODO
         pass
 
     def set_as_path(self, as_path):
+        # TODO
         pass
 
     def set_med(self, med):
+        # TODO
         pass
 
     def set_local_pref(self, local_pref):
+        # TODO
         pass
 
     def set_communities(self, communities):
+        # TODO
         pass
 
     def __str__(self):
+        # TODO add the other fields
         return 'IP Prefix: %s' % (self.ip_prefix, )
 
     def __repr__(self):
         return self.__str__()
 
     def filter(self, field, pattern):
+        # TODO
         if field == RouteAnnouncementFields.IP_PREFIX:
             self.logger.debug('Before: IP Prefix - %s | Pattern - %s' % (self.ip_prefix, pattern))
             self.ip_prefix.bitarray &= pattern.bitarray
@@ -98,6 +107,9 @@ class RouteAnnouncement(object):
 
 class SymbolicField(object):
     def __init__(self, field_type, length):
+        # TODO efficiently detect if there is an impossible bit in the bitarray
+        # TODO add support for all other fields
+        # TODO add support for the most important operations (e.g., bitwise-and)
 
         # initialize BitArray to all 1s
         self.field_type = field_type

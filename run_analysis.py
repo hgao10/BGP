@@ -4,14 +4,10 @@
 import argparse
 import cmd
 
-from model.announcement import RouteAnnouncementFields, SymbolicField
-from model.router import RouteMap, RouteMapType, RouteMapItems, RouteMapDirection
-
-from model.network import NetworkTopology
+from model.test_networks import get_simple_network
 
 
 class TestSuite(cmd.Cmd):
-    prompt = '> '
 
     def __init__(self, *args, **kw):
         cmd.Cmd.__init__(self, *args, **kw)
@@ -19,44 +15,26 @@ class TestSuite(cmd.Cmd):
         # current network
         self.network = None
 
+        self.prompt = '> '
+        # self.intro = 'Hi, '
+
         self.cmdloop()
 
-    def do_exit(self, line=''):
+    def do_exit(self):
         """exit: Leave the CLI"""
         return True
 
     def do_load(self, line=''):
-        self.network = NetworkTopology()
+        """load: Load one of the provided network models or create a new one from configurations"""
+        line = line.lower()
 
-        # add all interal routers and their route-maps
-        tmp_router = self.network.add_internal_router('main', '10.0.0.1', 10)
+        if line == 'simple':
+            self.network = get_simple_network()
+        else:
+            print('The supplied topology is not known: %s. Try "simple" for example.' % line)
 
-        tmp_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
-        rm_items = RouteMapItems()
-        pattern = SymbolicField.create_from_prefix('10.0.0.0/8')
-        rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern)
-        tmp_route_map.add_item(rm_items, 10)
-
-        tmp_router.add_route_map(tmp_route_map, RouteMapDirection.IN, '9.0.0.1')
-
-        tmp_route_map = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
-        rm_items = RouteMapItems()
-        pattern = SymbolicField.create_from_prefix('10.0.10.0/24')
-        rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern)
-        tmp_route_map.add_item(rm_items, 10)
-
-        tmp_router.add_route_map(tmp_route_map, RouteMapDirection.OUT, '11.0.0.1')
-
-        # add all neighboring routers that advertise and receive routes
-        self.network.add_external_router('in_neighbor', '9.0.0.1', 9)
-        self.network.add_external_router('out_neighbor', '11.0.0.1', 11)
-
-        # add the connections between the routers (e.g., full mesh between internal routers and a connection between
-        # external routers and their specific counterpart internally
-        self.network.add_peering('main', 'in_neighbor')
-        self.network.add_peering('main', 'out_neighbor')
-
-    def do_run(self, line=None):
+    def do_run(self):
+        """run: Run an analysis on the loaded network model by propagating a symbolic announcement"""
         if self.network:
             neighbor = 'in_neighbor'
 
