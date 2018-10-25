@@ -10,11 +10,13 @@ from utils.logger import get_logger
 
 
 class NetworkTopology(nx.Graph):
-    def __init__(self):
+    def __init__(self, name):
         super(NetworkTopology, self).__init__()
 
         # initialize logging
         self.logger = get_logger('NetworkTopology', 'INFO')
+
+        self.name = name
 
         # dict of router id to router
         self.routers = dict()

@@ -32,6 +32,9 @@ class TestSuite(cmd.Cmd):
             self.network = get_simple_network()
         else:
             print('The supplied topology is not known: %s. Try "simple" for example.' % line)
+            return
+
+        print('Loaded %s topology with %d nodes and %d edges.' % (self.network.name, len(self.network.nodes), len(self.network.edges)))
 
     def do_run(self, line=''):
         """run: Run an analysis on the loaded network model by propagating a symbolic announcement"""

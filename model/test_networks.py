@@ -14,7 +14,7 @@ def get_simple_network():
     routers (9.0.0.1 and 11.0.0.1). This topology allows to test basic functionality of in and out route-maps.
     :return: NetworkTopology
     """
-    network = NetworkTopology()
+    network = NetworkTopology('SingleRouterTwoNeighbors')
 
     # add all interal routers and their route-maps
     tmp_router = network.add_internal_router('main', '10.0.0.1', 10)
