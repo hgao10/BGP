@@ -165,7 +165,7 @@ class SymbolicField(object):
                 if not fnexthop[2 * i] and not fnexthop[2 * i + 1]:
                     print('ERROR: invalid bit found')
                 # 0 -> 01
-                elif not fip[2 * i] and fip[2 * i + 1]:
+                elif not fnexthop[2 * i] and fnexthop[2 * i + 1]:
                     next_hop += '0'
                 # 1 -> 10
                 elif fnexthop[2 * i] and not fnexthop[2 * i + 1]:

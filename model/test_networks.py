@@ -17,7 +17,7 @@ def get_simple_network():
     network = NetworkTopology('SingleRouterTwoNeighbors')
 
     # add all internal routers and their route-maps
-    tmp_router = network.add_internal_router('main', '10.0.0.1', 10)
+    tmp_router = network.add_internal_router('main', '10.0.0.1/32', 10)
 
     # add an import route-map that only permits announcements with prefix 10.0.0.0/8 or greater
     tmp_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
@@ -31,12 +31,12 @@ def get_simple_network():
     # add an import route-map that set next-path to self
     tmp_route_map = RouteMap('IMPORT_ACTION', RouteMapType.PERMIT)
     rm_item_next_hop = RouteMapItems()
-    pattern_next_hop = SymbolicField.create_from_prefix('tmp_router.next_hop_self' + '/32', 1)
+    pattern_next_hop = SymbolicField.create_from_prefix(tmp_router.next_hop_self , 1)
     # TODO need to add support for creating next-hop from an IP prefix list ?
     rm_item_next_hop.add_action(RouteAnnouncementFields.NEXT_HOP, pattern_next_hop)
     tmp_route_map.add_item(rm_item_next_hop, 20)
 
-    tmp_router.add_route_map(tmp_route_map, RouteMapDirection.In, '9.0.0.1')
+    tmp_router.add_route_map(tmp_route_map, RouteMapDirection.IN, '9.0.0.1')
 
     # add an export route-map that only permits announcements with prefix 10.0.10.0/24 or greater
     tmp_route_map = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
@@ -52,7 +52,7 @@ def get_simple_network():
     tmp_route_map = RouteMap('ExPORT_FILTER_NEXT_HOP', RouteMapType.PERMIT)
     # TODO add support for a deny clause
     rm_item_next_hop = RouteMapItems()
-    pattern_next_hop = SymbolicField.create_from_prefix('10.0.0.0/8',1)
+    pattern_next_hop = SymbolicField.create_from_prefix('10.0.0.1/32', 1)
 
     # TODO try with a different IP which would end up denying everything
     # what if routemap is deny and match is permit
