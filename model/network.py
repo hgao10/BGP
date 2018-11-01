@@ -33,7 +33,9 @@ class NetworkTopology(nx.Graph):
         self.name_to_router_id[name] = router_id
         self.router_id_to_name[router_id] = name
 
+
         # TODO check if we need to add router interfaces? probably for next-hop self/update source xyz
+
 
         return self.routers[router_id]
 
@@ -75,6 +77,7 @@ class NetworkTopology(nx.Graph):
         neighbor_id = self.get_router_id(neighbor)
 
         # find entry point from that neighbor
+        # returns a list of internal border routers that are connected to the external neighbor (expect a total of one)
         ingress_routers = list(self.neighbors(neighbor_id))
         ingress_router = ingress_routers[0]
 
@@ -88,7 +91,7 @@ class NetworkTopology(nx.Graph):
         # performing a DFS on the BGP topology graph, starting with the entry point
         while remaining_edges:
             prev_router_id, curr_router_id, announcement = remaining_edges.pop()
-            curr_router = self.routers[curr_router_id]
+            curr_router = self.routers[curr_router_id] # .routers is a dict of internal BGP routers indexed by ip addr
 
             # pass announcement through import filter (if it exists)
             if (RouteMapDirection.IN, prev_router_id) in curr_router.route_maps:
@@ -111,9 +114,12 @@ class NetworkTopology(nx.Graph):
                             export_announcement = local_announcement
 
                         if neighbor_id in self.peers:
+                            # If there are more than one local_announcement, external router dic will be overwritten??
                             external_routers[self.router_id_to_name[neighbor_id]] = export_announcement
+                            print('{} : {}'.format(self.router_id_to_name[neighbor_id], export_announcement))
                         else:
                             remaining_edges.append((curr_router_id, neighbor_id, export_announcement))
+                            print('remaining edges.append(curr_router_id, neighbor_id, export_announcement)', curr_router_id, neighbor_id, export_announcement)
 
         return external_routers
 

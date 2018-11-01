@@ -35,6 +35,9 @@ class InternalBGPRouter(BGPRouter):
     def __init__(self, router_id, name, as_number):
         super(InternalBGPRouter, self).__init__(router_id, name, as_number, RouterType.INTERNAL)
         self.route_maps = dict()
+        # add support for next-hop self
+
+        self.next_hop_self = router_id
 
     def add_route_map(self, route_map, direction, neighbor):
         tag = (direction, neighbor)
@@ -63,10 +66,13 @@ class RouteMap(object):
         # TODO make sure that splitting of announcement works when there is for example a deny clause
         processed_announcements = list()
 
-        self.sequence.sort(reverse=True)
+        # process announcements in the order of ascending sequence number
+        self.sequence.sort()
         for i in self.sequence:
             route_map_item = self.items[i]
             processed_announcements.append(route_map_item.apply(announcement))
+            # Does each processed announcement need to be fed into the next route-map-item?
+            # match ip-prefix, then permit as path or set next hop, or do a set AND at the end per route-map
 
         return processed_announcements
 
@@ -93,6 +99,8 @@ class RouteMapItems(object):
 
         # Applying the actions
         # TODO add actions
+        for action in self.actions:
+            tmp_announcement = action.apply(tmp_announcement)
 
         return tmp_announcement
 
@@ -117,4 +125,5 @@ class RouteMapAction(object):
 
     def apply(self, announcement):
         # TODO implement
+        announcement.filter(self.field, self.pattern)
         return announcement

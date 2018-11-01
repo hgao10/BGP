@@ -26,11 +26,15 @@ class RouteAnnouncement(object):
     def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, debug=False):
         # TODO model all other fields
         if ip_prefix:
-            self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix)
+            self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix,0)
         else:
             self.ip_prefix = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
 
-        self.next_hop = next_hop
+        if next_hop:
+            self.next_hop = SymbolicField.create_from_prefix(next_hop,1)
+        else:
+            self.next_hop = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
+
         self.as_path = as_path
         self.med = med
         self.local_pref = local_pref
@@ -60,6 +64,7 @@ class RouteAnnouncement(object):
 
     def set_next_hop(self, next_hop):
         # TODO
+        #self.next_hop.bitarray &= pattern.bitarray
         pass
 
     def set_as_path(self, as_path):
@@ -92,6 +97,9 @@ class RouteAnnouncement(object):
             self.ip_prefix.bitarray &= pattern.bitarray
             self.logger.debug('After: IP Prefix - %s' % (self.ip_prefix, ))
         elif field == RouteAnnouncementFields.NEXT_HOP:
+            self.logger.debug('Before: Next hop - %s | Pattern - %s' % (self.next_hop, pattern))
+            self.next_hop.bitarray &= pattern.bitarray
+            self.logger.debug('After: Next hop - %s' % (self.next_hop,))
             pass
         elif field == RouteAnnouncementFields.AS_PATH:
             pass
@@ -138,7 +146,7 @@ class SymbolicField(object):
                 # 0 -> 01
                 elif not fip[2 * i] and fip[2 * i + 1]:
                     ip_prefix += '0'
-                # 0 -> 01
+                # 1 -> 10
                 elif fip[2 * i] and not fip[2 * i + 1]:
                     ip_prefix += '1'
                 else:
@@ -148,11 +156,32 @@ class SymbolicField(object):
 
             prefix = '%s/%d' % ('.'.join(['%d' % int('0b%s' % ip_prefix[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), prefix_len)
             return prefix
+        elif self.field_type == RouteAnnouncementFields.NEXT_HOP:
+            fnexthop = self.bitarray
+            next_hop = ''
+            next_hop_len = 32
+            for i in range(0, 32):
+                # Z -> 00
+                if not fnexthop[2 * i] and not fnexthop[2 * i + 1]:
+                    print('ERROR: invalid bit found')
+                # 0 -> 01
+                elif not fip[2 * i] and fip[2 * i + 1]:
+                    next_hop += '0'
+                # 1 -> 10
+                elif fnexthop[2 * i] and not fnexthop[2 * i + 1]:
+                    next_hop += '1'
+                else:
+                    next_hop_len = i
+                    next_hop += '0' * (32 - next_hop_len)
+                    break
+
+            nexthop = '%s/%d' % ('.'.join(['%d' % int('0b%s' % next_hop[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), next_hop_len)
+            return nexthop
         else:
             return str(self.bitarray)
 
     @staticmethod
-    def create_from_prefix(str_ip_prefix):
+    def create_from_prefix(str_ip_prefix, type):
         ip_prefix = IPNetwork(str_ip_prefix)
 
         # take binary representation of prefix without the leading '0b'
@@ -171,7 +200,15 @@ class SymbolicField(object):
         # fill the end with wildcard bits
         formatted_ip_prefix_bin += '11' * (32 - ip_prefix.prefixlen)
 
-        symbolic_field = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
+        # convert an ip to a bit-array
+        if type == 0:
+            symbolic_field = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
+        # symbolic bit array is 1111111 wild cards AND with specified ip-converted bit array
+        else:
+            symbolic_field = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
         symbolic_field.bitarray &= BitArray(formatted_ip_prefix_bin)
 
         return symbolic_field
+
+
+
