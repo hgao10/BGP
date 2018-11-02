@@ -3,6 +3,7 @@
 
 import sys
 import networkx as nx
+from collections import defaultdict
 
 from model.router import InternalBGPRouter, ExternalBGPRouter, RouteMapDirection
 from model.announcement import RouteAnnouncement
@@ -34,7 +35,7 @@ class NetworkTopology(nx.Graph):
         self.router_id_to_name[router_id] = name
 
 
-        # TODO check if we need to add router interfaces? probably for next-hop self/update source xyz
+        # TODO check if we need to add router interfaces? probably for next-hop self, use interface ip/
 
 
         return self.routers[router_id]
@@ -63,22 +64,26 @@ class NetworkTopology(nx.Graph):
 
     def propagate_announcement(self, neighbor, announcement=None):
         # TODO add proper copies of the announcements in the graph traversal, absolutely necessary for anything but my trivial example.
+
         # TODO properly handle announcements, every route-map is a mapping from a single announcement to multiple announcements - this has to be considered
         #
 
         # dict to store all the announcements that arrived at all the neighbors after propagation
-        external_routers = dict()
+        external_routers = defaultdict(list)
 
         # if no announcement is supplied, just take the fully symbolic one
         if not announcement:
             announcement = RouteAnnouncement()
+            print('taking the fully symbolic announcement:', announcement)
 
         # map the neighbor to the router id, if the name was supplied
         neighbor_id = self.get_router_id(neighbor)
+        print('get in_neighbors ip, should be 9.0', neighbor_id)
 
         # find entry point from that neighbor
         # returns a list of internal border routers that are connected to the external neighbor (expect a total of one)
         ingress_routers = list(self.neighbors(neighbor_id))
+        print('returns the internal router that is directly connected to the neighbor, should just be 1, 10.0.0', ingress_routers)
         ingress_router = ingress_routers[0]
 
         if len(ingress_routers) > 1:
@@ -90,14 +95,18 @@ class NetworkTopology(nx.Graph):
 
         # performing a DFS on the BGP topology graph, starting with the entry point
         while remaining_edges:
+            print('remaining edges: ', remaining_edges)
             prev_router_id, curr_router_id, announcement = remaining_edges.pop()
             curr_router = self.routers[curr_router_id] # .routers is a dict of internal BGP routers indexed by ip addr
 
             # pass announcement through import filter (if it exists)
             if (RouteMapDirection.IN, prev_router_id) in curr_router.route_maps:
                 in_map = curr_router.route_maps[(RouteMapDirection.IN, prev_router_id)]
+                print('before applying routemapin, the announcement is', announcement)
                 local_announcements = in_map.apply(announcement)
+                print('assigning route-mapping-in to local_announcement', local_announcements)
             else:
+                # Question: shouldn't local_announcements be a list?? in_map.apply above returns a list
                 local_announcements = [announcement]
 
             for local_announcement in local_announcements:
@@ -105,6 +114,7 @@ class NetworkTopology(nx.Graph):
                 # and skip the neighbor from which the announcement was received as it is not announced back
                 for neighbor_id in self.neighbors(curr_router_id):
                     if neighbor_id == prev_router_id:
+                        print('Find in_neighbor in the return list, continue', neighbor_id)
                         continue
                     else:
                         if (RouteMapDirection.OUT, neighbor_id) in curr_router.route_maps:
@@ -115,7 +125,7 @@ class NetworkTopology(nx.Graph):
 
                         if neighbor_id in self.peers:
                             # If there are more than one local_announcement, external router dic will be overwritten??
-                            external_routers[self.router_id_to_name[neighbor_id]] = export_announcement
+                            external_routers[self.router_id_to_name[neighbor_id]].append(export_announcement)
                             print('{} : {}'.format(self.router_id_to_name[neighbor_id], export_announcement))
                         else:
                             remaining_edges.append((curr_router_id, neighbor_id, export_announcement))

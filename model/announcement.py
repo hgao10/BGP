@@ -23,17 +23,19 @@ class RouteAnnouncement(object):
     A BGP Route Announcement whose fields can be anywhere from fully symbolic to fully specified
     """
 
-    def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, debug=False):
+    def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, debug=True):
         # TODO model all other fields
         if ip_prefix:
             self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix,0)
         else:
             self.ip_prefix = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
+            print('fully symbolicfield for ip_prefix', self.ip_prefix)
 
         if next_hop:
             self.next_hop = SymbolicField.create_from_prefix(next_hop,1)
         else:
             self.next_hop = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
+            print('fully symbolicfield for next_hop', self.next_hop)
 
         self.as_path = as_path
         self.med = med
@@ -85,7 +87,7 @@ class RouteAnnouncement(object):
 
     def __str__(self):
         # TODO add the other fields
-        return 'IP Prefix: %s' % (self.ip_prefix, )
+        return 'IP Prefix: %s, Next Hope: %s' % (self.ip_prefix, self.next_hop)
 
     def __repr__(self):
         return self.__str__()
@@ -95,10 +97,12 @@ class RouteAnnouncement(object):
         if field == RouteAnnouncementFields.IP_PREFIX:
             self.logger.debug('Before: IP Prefix - %s | Pattern - %s' % (self.ip_prefix, pattern))
             self.ip_prefix.bitarray &= pattern.bitarray
+            print('after filtering ip prefix field', self.ip_prefix)
             self.logger.debug('After: IP Prefix - %s' % (self.ip_prefix, ))
         elif field == RouteAnnouncementFields.NEXT_HOP:
             self.logger.debug('Before: Next hop - %s | Pattern - %s' % (self.next_hop, pattern))
             self.next_hop.bitarray &= pattern.bitarray
+            print('after filtering next hop field', self.next_hop)
             self.logger.debug('After: Next hop - %s' % (self.next_hop,))
             pass
         elif field == RouteAnnouncementFields.AS_PATH:
@@ -123,6 +127,7 @@ class SymbolicField(object):
         self.field_type = field_type
         self.original_length = length
         self.bitarray = BitArray('int:%d=-1' % (2*length, ))
+        print('Creating a symbolicfield, bitarray is initialized as', self.bitarray)
 
         # we use twice the length as we want to represent every bit by 2 bits to additionally allow
         # for wildcard and impossible bits
@@ -153,7 +158,7 @@ class SymbolicField(object):
                     prefix_len = i
                     ip_prefix += '0' * (32 - prefix_len)
                     break
-
+            # TODO map 11 to wildcard character x? 
             prefix = '%s/%d' % ('.'.join(['%d' % int('0b%s' % ip_prefix[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), prefix_len)
             return prefix
         elif self.field_type == RouteAnnouncementFields.NEXT_HOP:
@@ -183,9 +188,11 @@ class SymbolicField(object):
     @staticmethod
     def create_from_prefix(str_ip_prefix, type):
         ip_prefix = IPNetwork(str_ip_prefix)
+        print(ip_prefix)
 
         # take binary representation of prefix without the leading '0b'
         bin_ip_prefix = ip_prefix.ip.bin[2:]
+        print(bin_ip_prefix)
         if len(bin_ip_prefix) < 32:
             bin_ip_prefix = '0' * (32-len(bin_ip_prefix)) + bin_ip_prefix
 
@@ -196,18 +203,22 @@ class SymbolicField(object):
                 formatted_ip_prefix_bin += '10'
             else:
                 formatted_ip_prefix_bin += '01'
+            # TODO Need to handle wildcard conversion for le, ge match????
 
         # fill the end with wildcard bits
         formatted_ip_prefix_bin += '11' * (32 - ip_prefix.prefixlen)
-
+        print('HSA rep:', formatted_ip_prefix_bin)
         # convert an ip to a bit-array
         if type == 0:
             symbolic_field = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
-        # symbolic bit array is 1111111 wild cards AND with specified ip-converted bit array
+            # symbolic bit array is 1111111 wild cards AND with specified ip-converted bit array
+            print('creating symbolic field from ip prefix', symbolic_field.bitarray)
         else:
             symbolic_field = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
-        symbolic_field.bitarray &= BitArray(formatted_ip_prefix_bin)
+            print('creating symbolic field from next hop', symbolic_field.bitarray)
 
+        symbolic_field.bitarray &= BitArray(formatted_ip_prefix_bin)
+        print("returning symbolic bitarray", symbolic_field.bitarray)
         return symbolic_field
 
 

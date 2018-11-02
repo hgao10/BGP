@@ -70,6 +70,7 @@ class RouteMap(object):
         self.sequence.sort()
         for i in self.sequence:
             route_map_item = self.items[i]
+            print('route_map_item in routemap.apply', route_map_item.matches, route_map_item.actions, i)
             processed_announcements.append(route_map_item.apply(announcement))
             # Does each processed announcement need to be fed into the next route-map-item?
             # match ip-prefix, then permit as path or set next hop, or do a set AND at the end per route-map
@@ -115,6 +116,7 @@ class RouteMapMatch(object):
     def apply(self, announcement):
         # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
         announcement.filter(self.field, self.pattern)
+        print('filtering routemap match item', self.field, self.pattern)
         return announcement
 
 
@@ -126,4 +128,5 @@ class RouteMapAction(object):
     def apply(self, announcement):
         # TODO implement
         announcement.filter(self.field, self.pattern)
+        print('filtering routemap action item', self.field, self.pattern)
         return announcement
