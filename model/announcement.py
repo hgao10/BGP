@@ -7,6 +7,11 @@ from netaddr import IPNetwork
 from bitstring import BitArray
 
 from utils.logger import get_logger
+import logging
+
+
+logger2 = logging.getLogger('hhhh')
+logger2.setLevel(logging.INFO)
 
 
 class RouteAnnouncementFields(Enum):
@@ -18,6 +23,55 @@ class RouteAnnouncementFields(Enum):
     COMMUNITIES = 6
 
 
+class FilterType(Enum):
+    EQUAL = 1
+    GE = 2
+    LE = 3
+
+
+class SubSet:
+    def __init__(self):
+        self.is_subset = 0
+        self.is_superset = 0
+        self.zero = 0
+        self.is_ip_subset_deny = 0
+    # check if a ip prefix bit array has any impossible bit in it
+
+    def check_zero(self, ip_prefix):
+        print("checking for zero bits in this ip", ip_prefix)
+        self.zero = 0
+        for i in range(0, 32):
+            if not ip_prefix[2 * i] and not ip_prefix[2 * i + 1]:
+                self.zero = 1
+                break
+            else:
+                continue
+        return self.zero
+
+    # check if ip2 is ip1's subset or superset by comparing ip prefix and length of each mask
+    def check_ip_subset(self, ip1, ip2):
+        self.is_subset = 0
+        self.is_superset = 0
+        ip_and = ip1.bitarray & ip2.bitarray
+        # if the lengths are equal, take ip2's form (supposedly the pattern to match)
+        if self.check_zero(ip_and) != 1:
+            print("checking prefix length between two ips", ip1.bitarray_mask, ip2.bitarray_mask)
+            if ip1.bitarray_mask >= ip2.bitarray_mask:
+                self.is_subset = 1
+            else:
+                self.is_superset = 1
+        return self
+
+    def check_ip_subset_deny(self, ip1, ip2):
+        self.is_ip_subset_deny = 0
+        if len(ip1) != 0:
+            for x in ip1:
+                if self.check_ip_subset(x, ip2).is_subset == 1:
+                    break
+                    self.is_ip_subset_deny = 1
+        return self
+
+
 class RouteAnnouncement(object):
     """
     A BGP Route Announcement whose fields can be anywhere from fully symbolic to fully specified
@@ -26,13 +80,19 @@ class RouteAnnouncement(object):
     def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, debug=True):
         # TODO model all other fields
         if ip_prefix:
-            self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix,0)
+            self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix,RouteAnnouncementFields.IP_PREFIX)
+            self.ip_prefix_next = SymbolicField.create_from_prefix(ip_prefix, RouteAnnouncementFields.IP_PREFIX)
+            self.ip_prefix_deny = []
+            self.ip_prefix_deny_next = []
         else:
             self.ip_prefix = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
+            self.ip_prefix_next = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
+            self.ip_prefix_deny = []
+            self.ip_prefix_deny_next = []
             print('fully symbolicfield for ip_prefix', self.ip_prefix)
 
         if next_hop:
-            self.next_hop = SymbolicField.create_from_prefix(next_hop,1)
+            self.next_hop = SymbolicField.create_from_prefix(next_hop,RouteAnnouncementFields.NEXT_HOP)
         else:
             self.next_hop = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
             print('fully symbolicfield for next_hop', self.next_hop)
@@ -41,8 +101,8 @@ class RouteAnnouncement(object):
         self.med = med
         self.local_pref = local_pref
         self.communities = communities
-
-        self.logger = get_logger('RouteAnnouncement', debug)
+        self.next = self
+        self.logger = get_logger('RouteAnnouncement', 'DEBUG')
 
     def set_field(self, field, value):
         if field == RouteAnnouncementFields.IP_PREFIX:
@@ -66,7 +126,7 @@ class RouteAnnouncement(object):
 
     def set_next_hop(self, next_hop):
         # TODO
-        #self.next_hop.bitarray &= pattern.bitarray
+        # self.next_hop.bitarray &= pattern.bitarray
         pass
 
     def set_as_path(self, as_path):
@@ -92,11 +152,50 @@ class RouteAnnouncement(object):
     def __repr__(self):
         return self.__str__()
 
-    def filter(self, field, pattern):
+    def set_action(self, instance, value):
+        pass
+
+    # match type could be eq, ge, le
+    def filter(self, field, pattern, match_type):
         # TODO
-        if field == RouteAnnouncementFields.IP_PREFIX:
-            self.logger.debug('Before: IP Prefix - %s | Pattern - %s' % (self.ip_prefix, pattern))
-            self.ip_prefix.bitarray &= pattern.bitarray
+        if match_type == FilterType.EQUAL:
+            if field == RouteAnnouncementFields.IP_PREFIX:
+                self.logger.debug('Before: IP Prefix - %s | Pattern - %s' % (self.ip_prefix, pattern))
+                subset = SubSet()
+                # subset = self.check_subset(self.ip_prefix.bitarray, pattern.bitarray, match_type)
+                print("ip_prefix bitarray should be all 1s", self.ip_prefix.bitarray)
+                print("pattern.bitarray:", pattern.bitarray)
+                if subset.check_zero(self.ip_prefix.bitarray & pattern.bitarray) == 0:
+                    print("subset check zero has passed, now checking subset")
+                    if subset.check_ip_subset(self.ip_prefix, pattern).is_subset == 1:
+                        print("checked that pattern.bitarray is a subset of the original ip")
+                        if len(self.ip_prefix_deny) != 0:
+                            print("length of the ip prefix deny list",len(self.ip_prefix_deny), self.ip_prefix_deny[0], str(pattern) )
+                            if subset.check_ip_subset_deny(self.ip_prefix_deny, pattern).is_ip_subset_deny == 0:
+                                # if it's a superset or non-overlapping
+                                # if last_item != 0 : # even if its the last item in the list
+                                    # self.ip_prefix_deny_next.append(pattern.bitarray)
+                                self.next.ip_prefix_deny.append(pattern)
+                                # self.ip_prefix_next = self.ip_prefix
+                                self.next.ip_prefix = self.ip_prefix
+                                self.ip_prefix = pattern
+                        else:
+                            self.next.ip_prefix_deny.append(pattern)
+                            # self.ip_prefix_next = self.ip_prefix
+                            self.next.ip_prefix = self.ip_prefix
+                            self.ip_prefix = pattern
+
+                    # else:
+                        # it is a subset, and next is equal to current
+                    # if it's a superset or non-overlapping
+                          # self.anndeny.ip_prefix = 0; no changes to the deny list
+                # else: # current ip is an subset of the pattern, eg: 10.0.10.0/24, then match 10.0.0.0/8
+                    # no changes to current announcement
+            # else:
+                # no matches have been found, move to the next match, do nothing
+
+            # self.ip_prefix.bitarray &= pattern.bitarray
+
             print('after filtering ip prefix field', self.ip_prefix)
             self.logger.debug('After: IP Prefix - %s' % (self.ip_prefix, ))
         elif field == RouteAnnouncementFields.NEXT_HOP:
@@ -127,6 +226,10 @@ class SymbolicField(object):
         self.field_type = field_type
         self.original_length = length
         self.bitarray = BitArray('int:%d=-1' % (2*length, ))
+        self.bitarray_mask = self.original_length
+
+
+
         print('Creating a symbolicfield, bitarray is initialized as', self.bitarray)
 
         # we use twice the length as we want to represent every bit by 2 bits to additionally allow
@@ -140,7 +243,7 @@ class SymbolicField(object):
         return len(self.bitarray)
 
     def __str__(self):
-        if self.field_type == RouteAnnouncementFields.IP_PREFIX:
+        if self.field_type == RouteAnnouncementFields.IP_PREFIX: # convert HSA bitarray to human-readable ip-prefix
             fip = self.bitarray
             ip_prefix = ''
             prefix_len = 32
@@ -158,7 +261,7 @@ class SymbolicField(object):
                     prefix_len = i
                     ip_prefix += '0' * (32 - prefix_len)
                     break
-            # TODO map 11 to wildcard character x? 
+            # TODO map 11 to wildcard character x?
             prefix = '%s/%d' % ('.'.join(['%d' % int('0b%s' % ip_prefix[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), prefix_len)
             return prefix
         elif self.field_type == RouteAnnouncementFields.NEXT_HOP:
@@ -209,15 +312,16 @@ class SymbolicField(object):
         formatted_ip_prefix_bin += '11' * (32 - ip_prefix.prefixlen)
         print('HSA rep:', formatted_ip_prefix_bin)
         # convert an ip to a bit-array
-        if type == 0:
+        if type == RouteAnnouncementFields.IP_PREFIX:
             symbolic_field = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
             # symbolic bit array is 1111111 wild cards AND with specified ip-converted bit array
             print('creating symbolic field from ip prefix', symbolic_field.bitarray)
-        else:
+        elif type == RouteAnnouncementFields.NEXT_HOP:
             symbolic_field = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
             print('creating symbolic field from next hop', symbolic_field.bitarray)
 
         symbolic_field.bitarray &= BitArray(formatted_ip_prefix_bin)
+        symbolic_field.bitarray_mask = ip_prefix.prefixlen
         print("returning symbolic bitarray", symbolic_field.bitarray)
         return symbolic_field
 

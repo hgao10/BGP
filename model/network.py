@@ -15,7 +15,7 @@ class NetworkTopology(nx.Graph):
         super(NetworkTopology, self).__init__()
 
         # initialize logging
-        self.logger = get_logger('NetworkTopology', 'INFO')
+        self.logger = get_logger('NetworkTopology', 'DEBUG')
 
         self.name = name
 
@@ -102,7 +102,7 @@ class NetworkTopology(nx.Graph):
             # pass announcement through import filter (if it exists)
             if (RouteMapDirection.IN, prev_router_id) in curr_router.route_maps:
                 in_map = curr_router.route_maps[(RouteMapDirection.IN, prev_router_id)]
-                print('before applying routemapin, the announcement is', announcement)
+                print('before applying route_map_in, the announcement is', announcement)
                 local_announcements = in_map.apply(announcement)
                 print('assigning route-mapping-in to local_announcement', local_announcements)
             else:
@@ -120,6 +120,7 @@ class NetworkTopology(nx.Graph):
                         if (RouteMapDirection.OUT, neighbor_id) in curr_router.route_maps:
                             out_map = curr_router.route_maps[(RouteMapDirection.OUT, neighbor_id)]
                             export_announcement = out_map.apply(local_announcement)
+                            print('OUT route map filtering', export_announcement)
                         else:
                             export_announcement = local_announcement
 

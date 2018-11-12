@@ -18,6 +18,10 @@ class RouteMapDirection(Enum):
     IN = 1
     OUT = 2
 
+class FilterType(Enum):
+    EQUAL = 1
+    GE = 2
+    LE = 3
 
 class BGPRouter(object):
     def __init__(self, router_id, name, as_number, router_type):
@@ -72,6 +76,10 @@ class RouteMap(object):
             route_map_item = self.items[i]
             print('route_map_item in routemap.apply', route_map_item.matches, route_map_item.actions, i)
             processed_announcements.append(route_map_item.apply(announcement))
+            # if route_map_item != self.items[-1]:
+            if i != self.sequence[-1]:
+                announcement = route_map_item.apply(announcement).next
+
             # Does each processed announcement need to be fed into the next route-map-item?
             # match ip-prefix, then permit as path or set next hop, or do a set AND at the end per route-map
 
@@ -83,8 +91,8 @@ class RouteMapItems(object):
         self.matches = list()
         self.actions = list()
 
-    def add_match(self, match_type, field, pattern):
-        tmp_rm_match = RouteMapMatch(match_type, field, pattern)
+    def add_match(self, match_type, field, pattern, filter_type):
+        tmp_rm_match = RouteMapMatch(match_type, field, pattern, filter_type)
         self.matches.append(tmp_rm_match)
 
     def add_action(self, field, pattern):
@@ -107,16 +115,20 @@ class RouteMapItems(object):
 
 
 class RouteMapMatch(object):
-    def __init__(self, match_type, field, pattern):
+    def __init__(self, match_type, field, pattern, filter_type):
         # TODO better model what the match actually does. For example, we need to distinguish between exact, greater or equal and less or equal prefix matches
         self.type = match_type  # permit or deny
         self.field = field
         self.pattern = pattern
+        self.filter_type = filter_type # equal, ge, le
 
     def apply(self, announcement):
         # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
-        announcement.filter(self.field, self.pattern)
-        print('filtering routemap match item', self.field, self.pattern)
+        announcement.filter(self.field, self.pattern, self.filter_type)
+
+        # TODO update the exclude field
+
+        print('filtering routemap match item', self.field, self.pattern, self.filter_type)
         return announcement
 
 
@@ -127,6 +139,6 @@ class RouteMapAction(object):
 
     def apply(self, announcement):
         # TODO implement
-        announcement.filter(self.field, self.pattern)
+        announcement.filter(self.field, self.pattern, FilterType.EQUAL)
         print('filtering routemap action item', self.field, self.pattern)
         return announcement
