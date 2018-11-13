@@ -75,10 +75,11 @@ class RouteMap(object):
         for i in self.sequence:
             route_map_item = self.items[i]
             print('route_map_item in routemap.apply', route_map_item.matches, route_map_item.actions, i)
-            processed_announcements.append(route_map_item.apply(announcement))
+            processed_ann, to_be_processed_ann = route_map_item.apply(announcement)
+            processed_announcements.append(processed_ann)
             # if route_map_item != self.items[-1]:
             if i != self.sequence[-1]:
-                announcement = route_map_item.apply(announcement).next
+                announcement = to_be_processed_ann
 
             # Does each processed announcement need to be fed into the next route-map-item?
             # match ip-prefix, then permit as path or set next hop, or do a set AND at the end per route-map
@@ -103,15 +104,17 @@ class RouteMapItems(object):
         tmp_announcement = announcement
 
         # Applying the matches
+        print("routemap_item, match list length", len(self.matches))
         for match in self.matches:
-            tmp_announcement = match.apply(tmp_announcement)
+            tmp_announcement, next_announcement = match.apply(tmp_announcement)
+
 
         # Applying the actions
         # TODO add actions
         for action in self.actions:
-            tmp_announcement = action.apply(tmp_announcement)
+            tmp_announcement, next_announcement = action.apply(tmp_announcement)
 
-        return tmp_announcement
+        return tmp_announcement, next_announcement
 
 
 class RouteMapMatch(object):
@@ -124,12 +127,13 @@ class RouteMapMatch(object):
 
     def apply(self, announcement):
         # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
-        announcement.filter(self.field, self.pattern, self.filter_type)
+
+        processed_ann, to_be_processed_ann = announcement.filter(self.field, self.pattern, self.filter_type)
 
         # TODO update the exclude field
 
         print('filtering routemap match item', self.field, self.pattern, self.filter_type)
-        return announcement
+        return processed_ann, to_be_processed_ann
 
 
 class RouteMapAction(object):
@@ -139,6 +143,7 @@ class RouteMapAction(object):
 
     def apply(self, announcement):
         # TODO implement
-        announcement.filter(self.field, self.pattern, FilterType.EQUAL)
+        # should just be set, instead of filtering
+        current_announcement, next_announcement = announcement.filter(self.field, self.pattern, FilterType.EQUAL)
         print('filtering routemap action item', self.field, self.pattern)
-        return announcement
+        return current_announcement, next_announcement

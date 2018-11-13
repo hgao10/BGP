@@ -9,6 +9,7 @@ from bitstring import BitArray
 from utils.logger import get_logger
 import logging
 
+import copy
 
 logger2 = logging.getLogger('hhhh')
 logger2.setLevel(logging.INFO)
@@ -101,7 +102,7 @@ class RouteAnnouncement(object):
         self.med = med
         self.local_pref = local_pref
         self.communities = communities
-        self.next = self
+        self.next = copy.deepcopy(self)
         self.logger = get_logger('RouteAnnouncement', 'DEBUG')
 
     def set_field(self, field, value):
@@ -158,6 +159,7 @@ class RouteAnnouncement(object):
     # match type could be eq, ge, le
     def filter(self, field, pattern, match_type):
         # TODO
+        self.logger = get_logger('RouteAnnouncement', 'DEBUG')
         if match_type == FilterType.EQUAL:
             if field == RouteAnnouncementFields.IP_PREFIX:
                 self.logger.debug('Before: IP Prefix - %s | Pattern - %s' % (self.ip_prefix, pattern))
@@ -168,7 +170,7 @@ class RouteAnnouncement(object):
                 if subset.check_zero(self.ip_prefix.bitarray & pattern.bitarray) == 0:
                     print("subset check zero has passed, now checking subset")
                     if subset.check_ip_subset(self.ip_prefix, pattern).is_subset == 1:
-                        print("checked that pattern.bitarray is a subset of the original ip")
+                        print("checked that pattern.bitarray is a subset of the original ip and current length of prefix_deny list is", len(self.ip_prefix_deny))
                         if len(self.ip_prefix_deny) != 0:
                             print("length of the ip prefix deny list",len(self.ip_prefix_deny), self.ip_prefix_deny[0], str(pattern) )
                             if subset.check_ip_subset_deny(self.ip_prefix_deny, pattern).is_ip_subset_deny == 0:
@@ -184,6 +186,7 @@ class RouteAnnouncement(object):
                             # self.ip_prefix_next = self.ip_prefix
                             self.next.ip_prefix = self.ip_prefix
                             self.ip_prefix = pattern
+                            print("self.next ip prefix, ip_prefix_deny, new processed ip is", self.next.ip_prefix, self.next.ip_prefix_deny[0], self.ip_prefix)
 
                     # else:
                         # it is a subset, and next is equal to current
@@ -196,8 +199,7 @@ class RouteAnnouncement(object):
 
             # self.ip_prefix.bitarray &= pattern.bitarray
 
-            print('after filtering ip prefix field', self.ip_prefix)
-            self.logger.debug('After: IP Prefix - %s' % (self.ip_prefix, ))
+
         elif field == RouteAnnouncementFields.NEXT_HOP:
             self.logger.debug('Before: Next hop - %s | Pattern - %s' % (self.next_hop, pattern))
             self.next_hop.bitarray &= pattern.bitarray
@@ -215,6 +217,10 @@ class RouteAnnouncement(object):
         else:
             self.logger.error('Tried to set unknown field "%sæ with value "%s"' % (field, pattern))
 
+        print('after filtering ip prefix field', self.ip_prefix)
+        self.logger.debug('After: IP Prefix - %s' % (self.ip_prefix,))
+        print("self.next.ip_prefix is and self.next.ip_prefix_list is at the end of filter call", self.next.ip_prefix, self.next.ip_prefix_deny[0])
+        return self, self.next
 
 class SymbolicField(object):
     def __init__(self, field_type, length):

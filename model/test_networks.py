@@ -29,13 +29,13 @@ def get_simple_network():
     tmp_router.add_route_map(tmp_route_map, RouteMapDirection.IN, '9.0.0.1')
 
     # add an route map item to the same import route map that set next-path to self
-    rm_item_next_hop = RouteMapItems()
+    rm_items = RouteMapItems()
     #pattern_next_hop = SymbolicField.create_from_prefix(tmp_router.next_hop_self, 1)
     # TODO need to add support for creating next-hop from an IP prefix list ?
     #rm_item_next_hop.add_action(RouteAnnouncementFields.NEXT_HOP, pattern_next_hop)
     pattern = SymbolicField.create_from_prefix('11.0.0.0/8', RouteAnnouncementFields.IP_PREFIX)
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.EQUAL)
-    tmp_route_map.add_item(rm_item_next_hop, 20)
+    tmp_route_map.add_item(rm_items, 20)
 
     tmp_router.add_route_map(tmp_route_map, RouteMapDirection.IN, '9.0.0.1')
     print('one import route map and two items', tmp_router.route_maps, tmp_router.route_maps.items)
@@ -52,23 +52,23 @@ def get_simple_network():
     # add a route-map item matches on ip next-hop prefix-list
 
     # TODO add support for a deny clause
-    rm_item_next_hop = RouteMapItems()
+    rm_items = RouteMapItems()
     #pattern_next_hop = SymbolicField.create_from_prefix('10.0.0.1/32', 1)
     # what if routemap is deny and match is permit
     #rm_item_next_hop.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.NEXT_HOP, pattern_next_hop)
     pattern = SymbolicField.create_from_prefix('10.0.20.0/24', RouteAnnouncementFields.IP_PREFIX)
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.EQUAL)
-    tmp_route_map.add_item(rm_item_next_hop, 20)
+    tmp_route_map.add_item(rm_items, 20)
 
     tmp_router.add_route_map(tmp_route_map, RouteMapDirection.OUT, '11.0.0.1')
 
-    rm_item_next_hop = RouteMapItems()
+    rm_items = RouteMapItems()
     # pattern_next_hop = SymbolicField.create_from_prefix('10.0.0.1/32', 1)
     # what if routemap is deny and match is permit
     # rm_item_next_hop.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.NEXT_HOP, pattern_next_hop)
     pattern = SymbolicField.create_from_prefix('11.0.20.0/24', RouteAnnouncementFields.IP_PREFIX)
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.EQUAL)
-    tmp_route_map.add_item(rm_item_next_hop, 30)
+    tmp_route_map.add_item(rm_items, 30)
 
     tmp_router.add_route_map(tmp_route_map, RouteMapDirection.OUT, '11.0.0.1')
 
