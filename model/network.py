@@ -113,12 +113,14 @@ class NetworkTopology(nx.Graph):
                 # iterate over all neighbors and pass through respective export filter (if it exists)
                 # and skip the neighbor from which the announcement was received as it is not announced back
                 for neighbor_id in self.neighbors(curr_router_id):
+                    print('current neighbor id is', neighbor_id)
                     if neighbor_id == prev_router_id:
                         print('Find in_neighbor in the return list, continue', neighbor_id)
                         continue
                     else:
                         if (RouteMapDirection.OUT, neighbor_id) in curr_router.route_maps:
                             out_map = curr_router.route_maps[(RouteMapDirection.OUT, neighbor_id)]
+                            print('going to apply OUT_MAP')
                             export_announcement = out_map.apply(local_announcement)
                             print('OUT route map filtering', export_announcement)
                         else:
@@ -130,7 +132,8 @@ class NetworkTopology(nx.Graph):
                             print('{} : {}'.format(self.router_id_to_name[neighbor_id], export_announcement))
                         else:
                             remaining_edges.append((curr_router_id, neighbor_id, export_announcement))
-                            print('remaining edges.append(curr_router_id, neighbor_id, export_announcement)', curr_router_id, neighbor_id, export_announcement)
+                            print('remaining edges.append(curr_router_id, neighbor_id, export_announcement)',
+                                  curr_router_id, neighbor_id, export_announcement)
 
         return external_routers
 

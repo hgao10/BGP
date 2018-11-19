@@ -2,6 +2,7 @@
 # Author: Ruediger Birkner (Networked Systems Group at ETH Zurich)
 
 from enum import Enum
+from utils.logger import get_logger
 
 
 class RouterType(Enum):
@@ -18,10 +19,12 @@ class RouteMapDirection(Enum):
     IN = 1
     OUT = 2
 
+
 class FilterType(Enum):
     EQUAL = 1
     GE = 2
     LE = 3
+
 
 class BGPRouter(object):
     def __init__(self, router_id, name, as_number, router_type):
@@ -59,6 +62,7 @@ class RouteMap(object):
         self.sequence = list()
         self.items = dict()
         self.type = rm_type  # permit or deny
+        self.logger = get_logger('RouteMap', 'DEBUG')
 
     def add_item(self, item, seq_number):
         self.sequence.append(seq_number)
@@ -66,23 +70,23 @@ class RouteMap(object):
 
     def apply(self, announcement):
         # TODO add support for both deny and permit
-        # TODO apply the route maps in proper order (sequence)
         # TODO make sure that splitting of announcement works when there is for example a deny clause
         processed_announcements = list()
 
+        # TODO Edge case: 2 ip prefix matches with same sequence number while the first one is a superset of the second?
         # process announcements in the order of ascending sequence number
         self.sequence.sort()
         for i in self.sequence:
             route_map_item = self.items[i]
-            print('route_map_item in routemap.apply', route_map_item.matches, route_map_item.actions, i)
+            self.logger.debug('Going to apply item seq %s in route map %s | current announcement is %s' % (i, self.name, announcement))
             processed_ann, to_be_processed_ann = route_map_item.apply(announcement)
-            processed_announcements.append(processed_ann)
+            self.logger.debug('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
+            print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
             # if route_map_item != self.items[-1]:
             if i != self.sequence[-1]:
                 announcement = to_be_processed_ann
-
-            # Does each processed announcement need to be fed into the next route-map-item?
-            # match ip-prefix, then permit as path or set next hop, or do a set AND at the end per route-map
+            if processed_ann.ip_hit == 1:
+                processed_announcements.append(processed_ann)
 
         return processed_announcements
 
@@ -107,7 +111,6 @@ class RouteMapItems(object):
         print("routemap_item, match list length", len(self.matches))
         for match in self.matches:
             tmp_announcement, next_announcement = match.apply(tmp_announcement)
-
 
         # Applying the actions
         # TODO add actions
