@@ -97,7 +97,7 @@ class NetworkTopology(nx.Graph):
         while remaining_edges:
             print('remaining edges: ', remaining_edges)
             prev_router_id, curr_router_id, announcement = remaining_edges.pop()
-            curr_router = self.routers[curr_router_id] # .routers is a dict of internal BGP routers indexed by ip addr
+            curr_router = self.routers[curr_router_id]  # .routers is a dict of internal BGP routers indexed by ip addr
 
             # pass announcement through import filter (if it exists)
             if (RouteMapDirection.IN, prev_router_id) in curr_router.route_maps:
@@ -106,12 +106,13 @@ class NetworkTopology(nx.Graph):
                 local_announcements = in_map.apply(announcement)
                 print('assigning route-mapping-in to local_announcement', local_announcements)
             else:
-                # Question: shouldn't local_announcements be a list?? in_map.apply above returns a list
                 local_announcements = [announcement]
 
             for local_announcement in local_announcements:
                 # iterate over all neighbors and pass through respective export filter (if it exists)
                 # and skip the neighbor from which the announcement was received as it is not announced back
+
+                # TODO make sure that iBGP announcements are not sent over more than one hop
                 for neighbor_id in self.neighbors(curr_router_id):
                     print('current neighbor id is', neighbor_id)
                     if neighbor_id == prev_router_id:
@@ -121,19 +122,19 @@ class NetworkTopology(nx.Graph):
                         if (RouteMapDirection.OUT, neighbor_id) in curr_router.route_maps:
                             out_map = curr_router.route_maps[(RouteMapDirection.OUT, neighbor_id)]
                             print('going to apply OUT_MAP')
-                            export_announcement = out_map.apply(local_announcement)
-                            print('OUT route map filtering', export_announcement)
+                            export_announcements = out_map.apply(local_announcement)
+                            print('OUT route map filtering', export_announcements)
                         else:
-                            export_announcement = local_announcement
+                            export_announcements = [local_announcement]
 
                         if neighbor_id in self.peers:
-                            # If there are more than one local_announcement, external router dic will be overwritten??
-                            external_routers[self.router_id_to_name[neighbor_id]].append(export_announcement)
-                            print('{} : {}'.format(self.router_id_to_name[neighbor_id], export_announcement))
+                            external_routers[self.router_id_to_name[neighbor_id]].extend(export_announcements)
+                            print('{} : {}'.format(self.router_id_to_name[neighbor_id], export_announcements))
                         else:
-                            remaining_edges.append((curr_router_id, neighbor_id, export_announcement))
-                            print('remaining edges.append(curr_router_id, neighbor_id, export_announcement)',
-                                  curr_router_id, neighbor_id, export_announcement)
+                            for export_announcement in export_announcements:
+                                remaining_edges.append((curr_router_id, neighbor_id, export_announcement))
+                                print('remaining edges.append(curr_router_id, neighbor_id, export_announcement)',
+                                      curr_router_id, neighbor_id, export_announcement)
 
         return external_routers
 

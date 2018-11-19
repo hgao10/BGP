@@ -75,7 +75,7 @@ class RouteAnnouncement(object):
         elif field == RouteAnnouncementFields.COMMUNITIES:
             self.set_communities(value)
         else:
-            self.logger.error('Tried to set unknown field "%sæ with value "%s"' % (field, value))
+            self.logger.error('Tried to set unknown field "%s with value "%s"' % (field, value))
 
     def set_ip_prefix(self, ip_prefix):
         # TODO
@@ -153,6 +153,7 @@ class RouteAnnouncement(object):
             #     self.is_superset = 1
         return is_subset
 
+    # this function is a bit weird. the return value will always be 0, you need to swap the order of break and is_ip_subset_deny = 1
     def check_ip_subset_deny(self, ip1, ip2):
         is_ip_subset_deny = 0
         if len(ip1) != 0:
@@ -168,7 +169,7 @@ class RouteAnnouncement(object):
         print("Doing deep copy")
         next = copy.deepcopy(self)
         print("Done deep copy")
-        if field == RouteAnnouncementFields.IP_PREFIX and filter_type == FilterType.GE :
+        if field == RouteAnnouncementFields.IP_PREFIX and filter_type == FilterType.GE:
             pattern.bitarray_mask_type = FilterType.GE
             self.logger.debug('Before filtering: IP Prefix - %s | IP Prefix bitarray - %s| Pattern - %s | '
                               'Pattern bitarray - %s | length of current prefix deny %s' %
@@ -184,10 +185,10 @@ class RouteAnnouncement(object):
 
             if self.check_zero(self.ip_prefix.bitarray & pattern.bitarray) == 0:
                 print('no zeros found between ip and pattern')
-                if self.ip_prefix.bitarray_mask_type == FilterType.EQUAL: # [10.0.0.0/8 equal deny] [ 10.0.10.0/24 ge]
+                if self.ip_prefix.bitarray_mask_type == FilterType.EQUAL:  # [10.0.0.0/8 equal deny] [ 10.0.10.0/24 ge]
                     if self.ip_prefix.bitarray_mask < pattern.bitarray_mask:
                         self.ip_hit = 0
-                    if self.ip_prefix.bitarray_mask >= pattern.bitarray_mask: # [ 10.0.0.0/24 equal ] [10.0.10.0/16 ge]
+                    if self.ip_prefix.bitarray_mask >= pattern.bitarray_mask:  # [ 10.0.0.0/24 equal ] [10.0.10.0/16 ge]
                         if match_type == RouteMapType.PERMIT:
                             self.ip_hit = 1
                             # No need to check deny list, assuming the deny list of an permit equal is non-existent
@@ -301,7 +302,7 @@ class RouteAnnouncement(object):
         elif field == RouteAnnouncementFields.COMMUNITIES:
             pass
         else:
-            self.logger.error('Tried to set unknown field "%sæ with value "%s"' % (field, pattern))
+            self.logger.error('Tried to set unknown field %s with value %s' % (field, pattern))
 
         return self, next
 
