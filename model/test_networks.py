@@ -38,8 +38,6 @@ def get_simple_network():
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
     tmp_route_map.add_item(rm_items, 20)
 
-    tmp_router.add_route_map(tmp_route_map, RouteMapDirection.IN, '9.0.0.1')
-
     # add an export route-map that only permits announcements with prefix 10.0.10.0/24 or greater
     tmp_route_map = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
     rm_items = RouteMapItems()
@@ -60,8 +58,6 @@ def get_simple_network():
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
     tmp_route_map.add_item(rm_items, 20)
 
-    tmp_router.add_route_map(tmp_route_map, RouteMapDirection.OUT, '11.0.0.1')
-
     rm_items = RouteMapItems()
     # pattern_next_hop = SymbolicField.create_from_prefix('10.0.0.1/32', 1)
     # what if routemap is deny and match is permit
@@ -69,8 +65,6 @@ def get_simple_network():
     pattern = SymbolicField.create_from_prefix('11.0.20.0/24', RouteAnnouncementFields.IP_PREFIX)
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
     tmp_route_map.add_item(rm_items, 30)
-
-    tmp_router.add_route_map(tmp_route_map, RouteMapDirection.OUT, '11.0.0.1')
 
     # add all neighboring routers that advertise and receive routes
     network.add_external_router('in_neighbor', '9.0.0.1', 9)

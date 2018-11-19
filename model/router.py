@@ -88,6 +88,9 @@ class RouteMap(object):
             if processed_ann.ip_hit == 1:
                 processed_announcements.append(processed_ann)
 
+            if processed_ann.drop_next_announcement == 1:
+                break
+
         return processed_announcements
 
 
@@ -131,7 +134,7 @@ class RouteMapMatch(object):
     def apply(self, announcement):
         # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
 
-        processed_ann, to_be_processed_ann = announcement.filter(self.field, self.pattern, self.filter_type)
+        processed_ann, to_be_processed_ann = announcement.filter(self.type, self.field, self.pattern, self.filter_type)
 
         # TODO update the exclude field
 
@@ -147,6 +150,6 @@ class RouteMapAction(object):
     def apply(self, announcement):
         # TODO implement
         # should just be set, instead of filtering
-        current_announcement, next_announcement = announcement.filter(self.field, self.pattern, FilterType.EQUAL)
+        current_announcement, next_announcement = announcement.filter(self.type, self.field, self.pattern, FilterType.EQUAL)
         print('filtering routemap action item', self.field, self.pattern)
         return current_announcement, next_announcement
