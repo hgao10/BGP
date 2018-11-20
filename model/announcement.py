@@ -198,9 +198,9 @@ class RouteAnnouncement(object):
                             self.drop_next_announcement = 1
                 if self.ip_prefix.bitarray_mask_type == FilterType.GE:
                     print('checked current ip prefix bitarray mask type is GE')
-                    if self.ip_prefix.bitarray_mask < pattern.bitarray_mask: # [10.0.0.0/8 ge deny subset or non-overlap][ 10.0.10.0/24 ge]
+                    if self.ip_prefix.bitarray_mask < pattern.bitarray_mask:  # [10.0.0.0/8 ge deny subset or non-overlap][ 10.0.10.0/24 ge]
                         print('checked current ip prefix bitarray is smaller than pattern bitarray mask')
-                        print ('match type should be Permit %s' % match_type)
+                        print('match type should be Permit %s' % match_type)
                         if match_type == RouteMapType.PERMIT:
                             print('checked current match type is Routemap Permit')
                             print('first symbolic ann should start being processed here!')
@@ -219,7 +219,7 @@ class RouteAnnouncement(object):
                                 next.ip_prefix_deny.append(pattern)
                             else:
                                 self.ip_hit = 0
-                    if self.ip_prefix.bitarray_mask >= pattern.bitarray_mask: # [ 10.0.10.0/24 ge ] [10.0.0.0/8 ge]
+                    if self.ip_prefix.bitarray_mask >= pattern.bitarray_mask:  # [ 10.0.10.0/24 ge ] [10.0.0.0/8 ge]
                         if match_type == RouteMapType.PERMIT:
                             self.ip_hit = 1
                             # no need to check deny list as it can't be a superset of the pattern
