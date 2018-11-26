@@ -162,8 +162,9 @@ class RouteAnnouncement(object):
         if len(ip1) != 0:
             for x in ip1:
                 if self.check_ip_subset(x, ip2) == 1:
-                    break
                     is_ip_subset_deny = 1
+                    break
+
         return is_ip_subset_deny
 
     # match type could be eq, ge, le
