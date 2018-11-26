@@ -4,15 +4,12 @@
 from enum import Enum
 from utils.logger import get_logger
 
+from model.announcement import RouteAnnouncementFields, FilterType
+
 
 class RouterType(Enum):
     INTERNAL = 1
     EXTERNAL = 2
-
-
-class RouteMapType(Enum):
-    PERMIT = 1
-    DENY = 2
 
 
 class RouteMapDirection(Enum):
@@ -101,6 +98,18 @@ class RouteMapItems(object):
 
     def add_match(self, match_type, field, pattern, filter_type):
         tmp_rm_match = RouteMapMatch(match_type, field, pattern, filter_type)
+        if field == RouteAnnouncementFields.IP_PREFIX:
+            if filter_type == FilterType.EQUAL:
+                pattern.prefix_mask = [pattern.ip_prefix, pattern.ip_prefix]
+
+            if filter_type == FilterType.GE:
+                pattern.prefix_mask = [pattern.ip_prefix, 32]
+
+            if filter_type == FilterType.LE:
+                pattern.prefix_mask = [0, pattern.ip_prefix]
+
+            pattern.bitarray = pattern.convert_to_hsa(pattern.str_ip_prefix, pattern.prefix_mask)
+
         self.matches.append(tmp_rm_match)
 
     def add_action(self, field, pattern):
@@ -124,17 +133,17 @@ class RouteMapItems(object):
 
 
 class RouteMapMatch(object):
-    def __init__(self, match_type, field, pattern, filter_type):
+    def __init__(self, match_type, field, pattern ):
         # TODO better model what the match actually does. For example, we need to distinguish between exact, greater or equal and less or equal prefix matches
         self.type = match_type  # permit or deny
         self.field = field
         self.pattern = pattern
-        self.filter_type = filter_type # equal, ge, le
+        #self.filter_type = filter_type # equal, ge, le
 
     def apply(self, announcement):
         # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
 
-        processed_ann, to_be_processed_ann = announcement.filter(self.type, self.field, self.pattern, self.filter_type)
+        processed_ann, to_be_processed_ann = announcement.filter(self.type, self.field, self.pattern)
 
         # TODO update the exclude field
 

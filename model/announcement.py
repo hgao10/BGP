@@ -10,7 +10,10 @@ from utils.logger import get_logger
 
 import copy
 
-from model.router import RouteMapType
+
+class RouteMapType(Enum):
+    PERMIT = 1
+    DENY = 2
 
 
 class RouteAnnouncementFields(Enum):
@@ -118,13 +121,15 @@ class RouteAnnouncement(object):
     # check if a ip prefix bit array has any impossible bit in it
     def check_zero(ip_prefix):
         zero = 0
+        zero_position = 0
         for i in range(0, 32):
             if not ip_prefix[2 * i] and not ip_prefix[2 * i + 1]:
                 zero = 1
+                zero_position = i
                 break
             else:
                 continue
-        return zero
+        return zero, zero_position
 
     def check_zero_list(self, ip_list, ip_prefix):
         zero=0
@@ -143,17 +148,14 @@ class RouteAnnouncement(object):
     def check_ip_subset(self, ip1, ip2):
         is_subset = 0
         # is_superset = 0
-        ip_and = ip1.bitarray & ip2.bitarray
-        # if the lengths are equal, take ip2's form (supposedly the pattern to match)
-        if self.check_zero(ip_and) != 1:
-            # print("checking prefix length between two ips", ip1.bitarray_mask, ip2.bitarray_mask)
-            if ip1.bitarray_mask <= ip2.bitarray_mask:
+        if ip1.prefix_mask[0] <= ip2.prefix_mask[0] and ip1.prefix_mask[1] >= ip2.prefix_mask[1]:
+            bitarray = ip1.convert_to_hsa(ip1.str_ip_bin, [0, ip2.prefix_mask[1]]) & ip2.convert_to_hsa(ip2.str_ip_bin, [0, ip2.prefix_mask[1]])
+            zero, zero_position = self.check_zero(bitarray)
+            if zero == 0:
                 is_subset = 1
-            # else:
-            #     self.is_superset = 1
+
         return is_subset
 
-    # this function is a bit weird. the return value will always be 0, you need to swap the order of break and is_ip_subset_deny = 1
     def check_ip_subset_deny(self, ip1, ip2):
         is_ip_subset_deny = 0
         if len(ip1) != 0:
@@ -164,129 +166,106 @@ class RouteAnnouncement(object):
 
         return is_ip_subset_deny
 
+    def prefix_mask_intersect(self, pattern):
+        if self.ip_prefix.prefix_mask[0]< pattern.ip_prefix.prefix_mask[0]:
+            self.ip_prefix.prefix_mask[0] = pattern.ip_prefix.prefix_mask[0]
+        if self.ip_prefix.prefix_mask[1]> pattern.ip_prefix.prefix_mask[1]:
+            self.ip_prefix.prefix_mask[1] = pattern.ip_prefix.prefix_mask[1]
+
+        return
+
+    def check_le_overlap(self, ip1, ip2):
+        bitarray1 = self.ip_prefix.convert_to_hsa(ip1.str_ip_bin, [ip1.prefix_mask[1], ip1.prefix_mask[1]])
+        bitarray2 = self.ip_prefix.convert_to_hsa(ip2.str_ip_bin, [ip2.prefix_mask[1], ip2.prefix_mask[1]])
+        ip_prefix = ''
+        fip = bitarray1&bitarray2
+        zero, zero_position = self.check_zero(fip)
+        if zero_position <= min(ip1.prefix_mask[1], ip2.prefix_mask[1]):
+            prefix_len = zero_position
+            print('Assign zero position to prefix_len %d' % prefix_len )
+            for i in range(0, zero_position):
+                # 0 -> 01
+                if not fip[2 * i] and fip[2 * i + 1]:
+                    ip_prefix += '0'
+                # 1 -> 10
+                elif fip[2 * i] and not fip[2 * i + 1]:
+                    ip_prefix += '1'
+
+            ip_prefix += '0' * (32 - prefix_len)
+
+            prefix = '%s/%d' % (
+            '.'.join(['%d' % int('0b%s' % ip_prefix[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), prefix_len)
+            return prefix, prefix_len
+
     # match type could be eq, ge, le
     def filter(self, match_type, field, pattern, filter_type):
         # TODO
         print("Doing deep copy")
         next = copy.deepcopy(self)
         print("Done deep copy")
-        if field == RouteAnnouncementFields.IP_PREFIX and filter_type == FilterType.GE:
-            pattern.bitarray_mask_type = FilterType.GE
-            self.logger.debug('Before filtering: IP Prefix - %s | IP Prefix bitarray - %s| Pattern - %s | '
-                              'Pattern bitarray - %s | length of current prefix deny %s' %
-                              (self.ip_prefix, self.ip_prefix.bitarray, pattern, pattern.bitarray,
-                               len(self.ip_prefix_deny)))
-            print('Before filtering: IP Prefix - %s | IP Prefix bitarray - %s| Pattern - %s | '
-                                    'Pattern bitarray - %s | length of current prefix deny %s |'
-                  '                     self.ip_prefix.bitarray_mask %s | self.ip_prefix.bitarray_mask_type %s  ' %
-                              (self.ip_prefix, self.ip_prefix.bitarray, pattern, pattern.bitarray,
-                               len(self.ip_prefix_deny), self.ip_prefix.bitarray_mask, self.ip_prefix.bitarray_mask_type))
-            self.ip_hit = 0
-            # initial announcement [Permit XXXX ge 0, Deny: [] ] [10.0.0.0 ge 8 ]
-
+        self.ip_hit = 0
+        self.drop_next_announcement = 0
+        if match_type == RouteMapType.PERMIT:
             if self.check_zero(self.ip_prefix.bitarray & pattern.bitarray) == 0:
-                print('no zeros found between ip and pattern')
-                if self.ip_prefix.bitarray_mask_type == FilterType.EQUAL:  # [10.0.0.0/8 equal deny] [ 10.0.10.0/24 ge]
-                    if self.ip_prefix.bitarray_mask < pattern.bitarray_mask:
-                        self.ip_hit = 0
-                    if self.ip_prefix.bitarray_mask >= pattern.bitarray_mask:  # [ 10.0.0.0/24 equal ] [10.0.10.0/16 ge]
-                        if match_type == RouteMapType.PERMIT:
-                            self.ip_hit = 1
-                            # No need to check deny list, assuming the deny list of an permit equal is non-existent
-                        if match_type == RouteMapType.DENY:
-                            # drop current announcement
+                if self.check_ip_subset_deny(self.ip_prefix_deny, pattern) == 0:
+
+                    if pattern.ip_prefix.prefix_type == FilterType.GE:
+                        if self.ip_prefix.prefix_mask[0] >= pattern.prefix_mask[0]:
                             self.ip_hit = 0
-                            self.drop_next_announcement = 1
-                if self.ip_prefix.bitarray_mask_type == FilterType.GE:
-                    print('checked current ip prefix bitarray mask type is GE')
-                    if self.ip_prefix.bitarray_mask < pattern.bitarray_mask:  # [10.0.0.0/8 ge deny subset or non-overlap][ 10.0.10.0/24 ge]
-                        print('checked current ip prefix bitarray is smaller than pattern bitarray mask')
-                        print('match type should be Permit %s' % match_type)
-                        if match_type == RouteMapType.PERMIT:
-                            print('checked current match type is Routemap Permit')
-                            print('first symbolic ann should start being processed here!')
-                            if (self.check_ip_subset_deny(self.ip_prefix_deny, pattern) == 0) or (len(self.ip_prefix_deny) == 0):
-                                self.ip_hit = 1
+                            # pattern is a superset of the current IP space
+                        else:
+                            # self.ip_prefix.prefix_mask[0] = pattern.prefix_mask[0]
+                            if self.ip_prefix.prefix_mask[1] >= pattern.prefix_mask[1]:
+                                # pattern is a subset of the original ip space
                                 self.ip_prefix = pattern
-                                next.ip_prefix_deny.append(pattern)
-                            else:
-                                # pattern is a subset of the deny list
-                                self.ip_hit = 0
-                        if match_type == RouteMapType.DENY:
-                            # pattern is not a subset of the deny list
-                            if (self.check_ip_subset_deny(self.ip_prefix_deny, pattern) == 0) or (
-                                    len(self.ip_prefix_deny) == 0):
-                                self.ip_hit = 0
-                                next.ip_prefix_deny.append(pattern)
-                            else:
-                                self.ip_hit = 0
-                    if self.ip_prefix.bitarray_mask >= pattern.bitarray_mask:  # [ 10.0.10.0/24 ge ] [10.0.0.0/8 ge]
-                        if match_type == RouteMapType.PERMIT:
+
+                            # no change to ip prefix string
+                            next.ip_prefix = pattern
+                            next.ip_prefix.prefix_mask[1] = pattern.prefix_mask[0]
                             self.ip_hit = 1
-                            # no need to check deny list as it can't be a superset of the pattern
-                            # covered all space in current announcement, no need to pass the next announcement
-                            # set next to none
-                            self.drop_next_announcement = 1
-                        if match_type == RouteMapType.DENY:
-                            self.ip_hit = 0
-                            self.drop_next_announcement = 1
 
-                # if self.ip_prefix.bitarray_mask == FilterType.LE:
-                #     if self.ip_prefix.bitarray_mask < pattern.bitarray_mask: # [10.0.0.0/8 le ] [10.0.10.0/24 ge]
-                #         self.ip_hit = 0
-                # TODO handle ge & le at the same time
-                #     if self.ip_prefix.bitarray_mask >= pattern.bitarray_mask: # [10.0.0.0/24 le] [10.10.0.0/16 ge]
-                #         self.ip_prefix
+                            next.ip_prefix_deny.append(self.ip_prefix)
 
-        if filter_type == FilterType.EQUAL and field == RouteAnnouncementFields.IP_PREFIX:
-            pattern.bitarray_mask_type = FilterType.EQUAL
-            self.ip_hit = 0
+                    if pattern.ip_prefix.prefix_type == FilterType.LE:
+                        if pattern.prefix_mask[1] >= self.ip_prefix.prefix_mask[1]:  # pattern is a superset of the current IP space
+                            self.ip_prefix.str_ip_prefix, self.ip_prefix.prefix_mask[1] = self.check_le_overlap(self.ip_prefix, pattern)
+                            self.ip_prefix.bitarray = self.ip_prefix.convert_to_hsa(self.ip_prefix.str_ip_prefix, self.ip_prefix.prefix_mask)
+                            self.ip_hit = 1
+
+                        else:
+                            self.ip_prefix.prefix_mask[1]= pattern.prefix_mask[1]
+                            self.ip_prefix.str_ip_prefix = pattern.str_ip_prefix
+                            self.ip_prefix.bitarray = self.ip_prefix.convert_to_hsa(self.ip_prefix.str_ip_prefix, self.ip_prefix.prefix_mask)
+                            self.ip_hit = 1
+
+                    if pattern.ip_prefix.prefix_type == FilterType.EQUAL:
+                        self.ip_prefix.mask[0] = pattern.prefix_mask[0]
+                        self.ip_prefix.mask[1] = pattern.prefix_mask[0]
+                        self.ip_prefix.str_ip_prefix = pattern.str_ip_prefix
+                        self.ip_prefix.bitarray = self.ip_prefix.convert_to_hsa(self.ip_prefix.str_ip_prefix, self.ip_prefix.prefix_mask)
+                        self.ip_hit = 1
+                        next.ip_prefix_deny.append(self.ip_prefix)
+
+        if match_type == RouteMapType.DENY:
             if self.check_zero(self.ip_prefix.bitarray & pattern.bitarray) == 0:
-                if self.ip_prefix.bitarray_mask_type == FilterType.EQUAL:
-                    if self.ip_prefix.bitarray_mask == pattern.bitarray_mask:
-                        # pattern can't have any overlapping with deny list 10.0.0.0/8 equal deny 11.0.0.0/24 permit 10.0.0.0/8
-                        if len(self.ip_prefix_deny) == 0 or self.check_zero_list(self.ip_prefix_deny, pattern) == 0:
-                            if match_type == RouteMapType.PERMIT:
-                                self.ip_hit = 1
-                            if match_type == RouteMapType.DENY:
-                                # shouldn't append this processed announcement to the output
-                                self.ip_hit = 0
-                            # Nothing else gets passed onto the next route map item
-                            # set next announcement to null
+                if self.check_ip_subset_deny(self.ip_prefix_deny, pattern) == 0:
+
+                    if pattern.ip_prefix.prefix_type == FilterType.GE:
+                        if self.ip_prefix.prefix_mask[0] >= pattern.prefix_mask[0]:
                             self.drop_next_announcement = 1
-                            # next.ip_prefix.bitarray = BitArray('int:%d=0' % (2*32, ))
+                            # pattern is a superset of the current IP space
+                            # drop the current announcement
+                        else:
+                            # self.ip_prefix.prefix_mask[0] = pattern.prefix_mask[0]
+                            # if self.ip_prefix.prefix_mask[1] >= pattern.prefix_mask[1]:
+                                # pattern is a subset of the original ip space
+                                # if its the last match, then ip_hit should be 1
+                            next.ip_prefix.str_ip_bin = pattern.str_ip_prefix
+                            next.ip_prefix.prefix_mask[1] = pattern.prefix_mask[0]
+                            next.ip_prefix.bitarray = next.ip_prefix.convert_to_hsa(next.ip_prefix.str_ip_bin, next.ip_prefix.prefix_mask)
 
-                if self.ip_prefix.bitarray_mask_type == FilterType.GE: # [10.0.0.0/8 ge, deny 10.0.10.0/32 ls deny 10.0.10.0/16 ge
-                                                                    #  deny 10.0.10.0/32 equal] permit 10.0.10.0/24 equal
-                    if self.ip_prefix.bitarray_mask <= pattern.bitarray_mask :
-                        if len(self.ip_prefix_deny) == 0 or self.check_zero_list(self.ip_prefix_deny, pattern) == 0:
-                            if match_type == RouteMapType.PERMIT:
-                                self.ip_hit = 1
-                                self.ip_prefix = pattern
-                                # self.ip_prefix.bitarray_mask = pattern.bitarray_mask
-                                self.ip_prefix.bitarray_mask_type = pattern.bitarray_mask_type
-                                next.ip_prefix_deny.append(pattern)
-                            if match_type == RouteMapType.DENY:
-                                self.ip_hit = 0  # don't append it to the processed announcement list
-                                self.ip_prefix_deny.append(pattern)
-                                next.ip_prefix_deny.append(pattern)
-                    if self.ip_prefix.bitarray_mask > pattern.bitarray_mask:  # [10.0.0.0/24 ge, ] [10.0.10.0/8 equal]
-                        self.ip_hit = 0
-
-                if self.ip_prefix.bitarray_mask_type == FilterType.LE:
-                    if self.ip_prefix.bitarray_mask <= pattern.bitarray_mask : # [10.0.0.0 ls 8] [10.0.10.0/24 equal]
-                        self.ip_hit = 0
-                    if self.ip_prefix.bitarray_mask >= pattern.bitarray_mask : # [10.0.0.0/24 ls] [10.10.0.0/16 equal]
-                        if len(self.ip_prefix_deny) == 0 or self.check_zero_list(self.ip_prefix_deny, pattern) == 0:
-                            if match_type == RouteMapType.PERMIT:
-                                self.ip_prefix = pattern
-                                self.ip_prefix.bitarray = pattern.bitarray_mask
-                                self.ip_prefix.bitarray_mask_type = pattern.bitarray_mask_type
-                                next.ip_prefix_deny.append(pattern)
-                            if match_type == RouteMapType.DENY:
-                                self.ip_hit = 0  # don't append to the processed announcement list
-                                self.ip_prefix_deny.append(pattern)
-                                next.ip_prefix_deny.append(pattern)
+                    if pattern.ip_prefix.prefix_type == FilterType.LE:
+                        next.ip_prefix_deny.append(pattern)
 
         elif field == RouteAnnouncementFields.NEXT_HOP:
             self.logger.debug('Before: Next hop - %s | Pattern - %s' % (self.next_hop, pattern))
@@ -318,8 +297,9 @@ class SymbolicField(object):
         self.field_type = field_type
         self.original_length = length
         self.bitarray = BitArray('int:%d=-1' % (2*length, ))
-        self.bitarray_mask = 0
-        self.bitarray_mask_type = FilterType.GE
+        self.str_ip_prefix = '0.0.0.0/0'
+        self.prefix_mask = [0, 32]
+        self.prefix_mask_type = FilterType.GE
 
         self.logger = get_logger('SymbolicField', 'DEBUG')
 
@@ -379,6 +359,32 @@ class SymbolicField(object):
         else:
             return str(self.bitarray)
 
+    @ staticmethod
+    def convert_to_hsa(str_ip_prefix, prefix_mask):
+        ip_prefix = IPNetwork(str_ip_prefix)
+        bin_ip_prefix = ip_prefix.ip.bin[2:]
+        bitarray = BitArray('int:%d=-1' % (2 * 32,))
+        if len(bin_ip_prefix) < 32:
+            bin_ip_prefix = '0' * (32-len(bin_ip_prefix)) + bin_ip_prefix
+
+        # create a new bitstring by translating bits to the four bit representation
+        formatted_ip_prefix_bin = '0b'
+        for i in range(0, 32):
+            if prefix_mask[0] <= i <= (prefix_mask[1] - 1):
+                # fill the prefix mask[x,y] with wildcard bits
+                formatted_ip_prefix_bin += '11'
+            else:
+                if bin_ip_prefix[i] == '1':
+                    formatted_ip_prefix_bin += '10'
+                else:
+                    formatted_ip_prefix_bin += '01'
+
+        if type == RouteAnnouncementFields.IP_PREFIX:
+            bitarray &= BitArray(formatted_ip_prefix_bin)
+
+        return bitarray
+
+    # @staticmethod
     @staticmethod
     def create_from_prefix(str_ip_prefix, type):
         logger = get_logger('SymbolicField_create_from_prefix', 'DEBUG')

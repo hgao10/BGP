@@ -2,8 +2,8 @@
 # Author: Ruediger Birkner (Networked Systems Group at ETH Zurich)
 
 
-from model.announcement import RouteAnnouncementFields, SymbolicField, FilterType
-from model.router import RouteMap, RouteMapType, RouteMapItems, RouteMapDirection
+from model.announcement import RouteMapType, RouteAnnouncementFields, SymbolicField, FilterType
+from model.router import RouteMap, RouteMapItems, RouteMapDirection
 
 from model.network import NetworkTopology
 
@@ -299,7 +299,7 @@ def get_test5_network():
     network.add_peering('main', 'out_neighbor')
 
     # expected output should be an announcement for 11.0.0.0/24, an announcement for 11.0.0.0/16 with deny 11.0.0.0/24,
-    # and an announcement for 11.0.0.0/8 with deny 11.0.0.0/24 and 11.0.0.0/24,
+    # and an announcement for 11.0.0.0/8 with deny 11.0.0.0/24 and 11.0.0.0/16,
 
     return network
 
@@ -360,6 +360,8 @@ def get_test7_network():
     # add an item that only permits announcements with prefix 39.128.0.0/16 or smaller
     rm_items = RouteMapItems()
     pattern = SymbolicField.create_from_prefix('39.128.0.0/16', RouteAnnouncementFields.IP_PREFIX)
+    print("RouteMapType.PERMIT: %d RouteAnnouncementFields.IP_PREFIX: %d pattern: %s FilterType.LE:%d" % (RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE))
+
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE)
     tmp_in_route_map.add_item(rm_items, 10)
 
