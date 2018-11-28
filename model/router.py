@@ -4,7 +4,7 @@
 from enum import Enum
 from utils.logger import get_logger
 
-from model.announcement import RouteAnnouncementFields, FilterType
+from model.announcement import FilterType, RouteAnnouncementFields
 
 
 class RouterType(Enum):
@@ -15,12 +15,6 @@ class RouterType(Enum):
 class RouteMapDirection(Enum):
     IN = 1
     OUT = 2
-
-
-class FilterType(Enum):
-    EQUAL = 1
-    GE = 2
-    LE = 3
 
 
 class BGPRouter(object):
@@ -95,21 +89,35 @@ class RouteMapItems(object):
     def __init__(self):
         self.matches = list()
         self.actions = list()
+        self.logger = get_logger('RouteMapItems', 'DEBUG')
 
     def add_match(self, match_type, field, pattern, filter_type):
-        tmp_rm_match = RouteMapMatch(match_type, field, pattern, filter_type)
+        self.logger.debug('adding a match with match_type %s | field: %s | pattern: %s| filter_type: %s' % (match_type, field, pattern, filter_type))
+        tmp_rm_match = RouteMapMatch(match_type, field, pattern)
+
         if field == RouteAnnouncementFields.IP_PREFIX:
+            self.logger.debug('Entered field : %s == RouteAnnouncementFields.IP_PREFIX and filter_type: %s and %s!' % (field, filter_type, FilterType.LE))
+
             if filter_type == FilterType.EQUAL:
+                self.logger.debug('Entered filter_type == filtertype.equal if')
+
                 pattern.prefix_mask = [pattern.ip_prefix, pattern.ip_prefix]
+                pattern.prefix_type = FilterType.EQUAL
 
             if filter_type == FilterType.GE:
-                pattern.prefix_mask = [pattern.ip_prefix, 32]
+                self.logger.debug('Entered filter_type == filtertype.ge if')
+
+                pattern.prefix_mask = [pattern.prefixlen, 32]
+                pattern.prefix_type = FilterType.GE
 
             if filter_type == FilterType.LE:
-                pattern.prefix_mask = [0, pattern.ip_prefix]
+                self.logger.debug('Entered filter_type == filtertype.le if')
+                pattern.prefix_mask = [0, pattern.prefixlen]
+                pattern.prefix_type = FilterType.LE
+                self.logger.debug('pattern prefix mask is now %s' % pattern.prefix_mask)
 
-            pattern.bitarray = pattern.convert_to_hsa(pattern.str_ip_prefix, pattern.prefix_mask)
-
+            # pattern.bitarray = pattern.convert_to_hsa(pattern.str_ip_prefix, pattern.prefix_mask)
+            self.logger.debug("Exiting...")
         self.matches.append(tmp_rm_match)
 
     def add_action(self, field, pattern):
@@ -120,7 +128,7 @@ class RouteMapItems(object):
         tmp_announcement = announcement
 
         # Applying the matches
-        print("routemap_item, match list length", len(self.matches))
+        self.logger.debug("Read to apply routemap item, match list length: %s" % len(self.matches))
         for match in self.matches:
             tmp_announcement, next_announcement = match.apply(tmp_announcement)
 
@@ -133,21 +141,23 @@ class RouteMapItems(object):
 
 
 class RouteMapMatch(object):
-    def __init__(self, match_type, field, pattern ):
+    def __init__(self, match_type, field, pattern):
         # TODO better model what the match actually does. For example, we need to distinguish between exact, greater or equal and less or equal prefix matches
         self.type = match_type  # permit or deny
         self.field = field
         self.pattern = pattern
+        self.logger = get_logger('RouteMapMatch', 'DEBUG')
         #self.filter_type = filter_type # equal, ge, le
 
     def apply(self, announcement):
         # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
 
+        self.logger.debug('Going to filter pattern: %s|pattern bitarray: %s| field: %s| match_type: %s' % (self.pattern, self.pattern.bitarray, self.field, self.type))
         processed_ann, to_be_processed_ann = announcement.filter(self.type, self.field, self.pattern)
 
         # TODO update the exclude field
+        self.logger.debug('Has filtered pattern: %s' % self.pattern)
 
-        print('filtering routemap match item', self.field, self.pattern, self.filter_type)
         return processed_ann, to_be_processed_ann
 
 

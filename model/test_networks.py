@@ -6,7 +6,10 @@ from model.announcement import RouteMapType, RouteAnnouncementFields, SymbolicFi
 from model.router import RouteMap, RouteMapItems, RouteMapDirection
 
 from model.network import NetworkTopology
+from utils.logger import get_logger
 
+
+logger = get_logger('test_networks', 'DEBUG')
 
 def get_simple_network():
     """
@@ -360,10 +363,11 @@ def get_test7_network():
     # add an item that only permits announcements with prefix 39.128.0.0/16 or smaller
     rm_items = RouteMapItems()
     pattern = SymbolicField.create_from_prefix('39.128.0.0/16', RouteAnnouncementFields.IP_PREFIX)
-    print("RouteMapType.PERMIT: %d RouteAnnouncementFields.IP_PREFIX: %d pattern: %s FilterType.LE:%d" % (RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE))
-
+    logger.debug("pattern: %s" % pattern)
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE)
+    logger.debug("after adding match: pattern: %s" % pattern)
     tmp_in_route_map.add_item(rm_items, 10)
+    logger.debug("adding item in the map: %s" % pattern)
 
     tmp_router.add_route_map(tmp_in_route_map, RouteMapDirection.IN, '9.0.0.1')
 
