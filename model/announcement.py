@@ -107,8 +107,9 @@ class RouteAnnouncement(object):
         # TODO add the other fields
         if len(self.ip_prefix_deny) != 0:
             for x in self.ip_prefix_deny:
-                self.ip_deny_display = ("".join(str(x)))
-        return 'IP Prefix: %s, IP Deny: %s,  Next Hop: %s' % (self.ip_prefix, self.ip_deny_display, self.next_hop)
+                mask = str(x) + " "+str(x.prefix_mask)
+                self.ip_deny_display = ("".join(str(mask)))
+        return 'IP Prefix: %s, IP Prefix Mask: %s, IP Deny: %s, Next Hop: %s' % (self.ip_prefix, self.ip_prefix.prefix_mask, self.ip_deny_display, self.next_hop)
 
     def __repr__(self):
         return self.__str__()
@@ -148,23 +149,32 @@ class RouteAnnouncement(object):
                 continue
         return zero
 
-    # check if ip2 is ip1's subset or superset by comparing ip prefix and length of each mask
-    def check_ip_subset(self, ip1, ip2):
+    def check_subset(self, ip1, ip2):
+        # check if ip2 is a subset of ip1
         is_subset = 0
-        # is_superset = 0
+        zero, zero_position = self.check_zero(ip1.bitarray & ip2.bitarray)
+        range = self.check_ip_range_overlap(ip1.prefix_mask, ip2.prefix_mask)
+        if range[0] == -1:
+            self.logger.error("IP mask ranges should be overlapping at this point")
         if ip1.prefix_mask[0] <= ip2.prefix_mask[0] and ip1.prefix_mask[1] >= ip2.prefix_mask[1]:
-            bitarray = ip1.convert_to_hsa(ip1.str_ip_bin, [0, ip2.prefix_mask[1]]) & ip2.convert_to_hsa(ip2.str_ip_bin, [0, ip2.prefix_mask[1]])
-            zero, zero_position = self.check_zero(bitarray)
-            if zero == 0:
-                is_subset = 1
+            # Superset is GE type
+            if ip1.prefix_mask[1] == 32:
+                if zero_position + 1 > ip1.prefix_mask[0]:
+                    is_subset = 1
+            # Superset is LE type
+            if ip1.prefix_mask[0] == 0:
+                self.logger.debug("comparing subset of LE types: zero position = %s" % ip2.prefix_mask[1])
+                if zero_position + 1 > ip2.prefix_mask[1]:
+
+                    is_subset = 1
 
         return is_subset
 
-    def check_ip_subset_deny(self, ip1, ip2):
+    def check_subset_deny(self, ip1, ip2):
         is_ip_subset_deny = 0
         if len(ip1) != 0:
             for x in ip1:
-                if self.check_ip_subset(x, ip2) == 1:
+                if self.check_subset(x, ip2) == 1:
                     is_ip_subset_deny = 1
                     break
 
@@ -178,16 +188,14 @@ class RouteAnnouncement(object):
 
         return
 
-    def check_le_overlap(self, ip1, ip2):
-        # bitarray1 = self.ip_prefix.convert_to_hsa(ip1.str_ip_bin, [ip1.prefix_mask[1], ip1.prefix_mask[1]])
-        # bitarray2 = self.ip_prefix.convert_to_hsa(ip2.str_ip_bin, [ip2.prefix_mask[1], ip2.prefix_mask[1]])
+    def check_le_overlap(self, ip1, ip2, limit):
         ip_prefix = ''
         self.logger.debug("check le overlap, ip1.bitarray: %s and ip2.bitarray: %s" % (ip1.bitarray, ip2.bitarray))
         fip = ip1.bitarray & ip2.bitarray
 
         zero, zero_position = self.check_zero(fip)
         self.logger.debug("zero is found %s and zero_position is %s" % (zero, zero_position))
-        if zero_position < min(ip1.prefix_mask[1], ip2.prefix_mask[1]):
+        if limit[0] < zero_position < limit[1]:
             prefix_len = zero_position
             print('Assign zero position to prefix_len %d' % prefix_len)
             for i in range(0, zero_position):
@@ -204,31 +212,80 @@ class RouteAnnouncement(object):
             '.'.join(['%d' % int('0b%s' % ip_prefix[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), prefix_len)
 
             filtered_ip = SymbolicField.create_from_prefix(prefix, RouteAnnouncementFields.IP_PREFIX)
-
+            filtered_ip.prefix_mask = [limit[0], prefix_len]
         elif zero_position == 32:
             prefix = ip1.ip_str_of_smaller_prefix_len(ip2)
+            # check for filter pattern is a superset of the original announcement
+
             self.logger.debug("zero position is at 32 and smaller prefix is %s" % prefix)
             filtered_ip = SymbolicField.create_from_prefix(prefix, RouteAnnouncementFields.IP_PREFIX)
+            filtered_ip.prefix_mask = limit
+        else:
+            # zero position is before range[0]
+            filtered_ip = -1
 
         return filtered_ip
+
+    def check_ge_le_overlap(self, ip1, ip2, limit):
+
+        self.logger.debug("check GE LE overlap, ip1.bitarray: %s and ip2.bitarray: %s" % (ip1.bitarray, ip2.bitarray))
+        fip = ip1.bitarray & ip2.bitarray
+        ip_prefix = ''
+        zero, zero_position = self.check_zero(fip)
+        self.logger.debug("zero is found %s and zero_position is %s" % (zero, zero_position))
+        overlap = 0
+        if ip2.prefix_type == FilterType.LE:
+            # zero position could fall inside the range, but at least it needs to be greater than range[0]
+            if zero_position + 1 > limit[0]:
+                prefix_len = min(zero_position, limit[1])
+                for i in range(0, prefix_len):
+                    if not fip[2 * i] and fip[2 * i + 1]:
+                        ip_prefix += '0'
+                    # 1 -> 10
+                    elif fip[2 * i] and not fip[2 * i + 1]:
+                        ip_prefix += '1'
+
+                ip_prefix += '0' * (32 - prefix_len)
+                prefix = '%s/%d' % (
+                    '.'.join(['%d' % int('0b%s' % ip_prefix[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), prefix_len)
+                overlap = SymbolicField.create_from_prefix(prefix, RouteAnnouncementFields.IP_PREFIX)
+                overlap.prefix_mask = [limit[0], prefix_len]
+        elif ip2.prefix_type == FilterType.GE:
+            if zero_position + 1 > limit[0]:
+                # check if its two GE type overlapping
+                if limit[1] == 32:
+                    prefix= ip2.str_ip_prefix
+                else:
+                    prefix = ip1.str_ip_prefix
+                overlap = SymbolicField.create_from_prefix(prefix, RouteAnnouncementFields.IP_PREFIX)
+                overlap.prefix_mask = limit
+
+            else: # there is no overlapping
+                overlap = -1
+
+        return overlap
 
 
     @ staticmethod
     def equal_two_symbolic_ip(ip1, ip2):
-        ip1.prefixlen = ip2.prefixlen
-        ip1.bitarray = ip2.bitarray
-        ip1.str_ip_prefix = ip2.str_ip_prefix
-        ip1.prefix_mask = ip2.prefix_mask
+        if ip1.str_ip_prefix == ip2.str_ip_prefix:
+            return 0
+        else:
+            ip1.prefixlen = ip2.prefixlen
+            ip1.bitarray = ip2.bitarray
+            ip1.str_ip_prefix = ip2.str_ip_prefix
+            ip1.prefix_mask = ip2.prefix_mask
 
         return
 
-    def check_ip_range_overlap(self, prefix_mask1, prefix_mask2):
+    @staticmethod
+    def check_ip_range_overlap(prefix_mask1, prefix_mask2):
 
         lower_bound = max(prefix_mask1[0], prefix_mask2[0])
         upper_bound = min(prefix_mask1[1], prefix_mask2[1])
         if lower_bound <= upper_bound:
             return [lower_bound, upper_bound]
-
+        # there is no intersection in ranges
         return [-1, -1]
 
     # match type could be eq, ge, le
@@ -238,65 +295,79 @@ class RouteAnnouncement(object):
         next = copy.deepcopy(self)
         print("Done deep copy")
 
+        # assume pattern can only be GE, LE or EQUAL. Currently not considering GE and LE at the match
         if field == RouteAnnouncementFields.IP_PREFIX:
             self.ip_hit = 0
             self.drop_next_announcement = 0
-
-            if match_type == RouteMapType.PERMIT:
-
-                if pattern.prefix_type == FilterType.LE:
+            self.logger.debug("prefix_mask of ip1 %s" % self.ip_prefix.prefix_mask[0])
+            limit = self.check_ip_range_overlap(self.ip_prefix.prefix_mask, pattern.prefix_mask)
+            self.logger.debug("prefix_mask_intersect %s" % limit)
+            # no overlaps between two ips, or the pattern to be matched is already in the deny list
+            if limit[0] == -1 or self.check_subset_deny(self.ip_prefix_deny, pattern) == 1:
+                self.ip_hit = 0
+            # if pattern is a superset of the current ip
+            else:
+                if self.check_subset(pattern, self.ip_prefix) == 1:
+                    self.logger.debug("pattern is a superset of the current ip. Pattern: %s | Self: %s" % (pattern, self.ip_prefix))
+                    # no leftovers from current match to be passed to the next
+                    self.drop_next_announcement = 1
+                    if match_type == RouteMapType.PERMIT:
+                        self.ip_hit = 1
+                    else:
+                        self.ip_hit = 0
+                        # everything is denied
+                elif pattern.prefix_type == FilterType.LE:
                     self.logger.debug("Entering LE filtering")
-                    limit = self.check_ip_range_overlap(self.ip_prefix.prefix_mask, pattern.prefix_mask)
-                    self.logger.debug("prefix_mask_intersect %s" % limit)
-                    if limit[0] != -1:
-
-                        if limit[0] == 0:
-
-                            self.equal_two_symbolic_ip(self.ip_prefix, self.check_le_overlap(self.ip_prefix, pattern))
-
-                            self.ip_hit = 1
-                            self.logger.debug("self ip_prefix %s" % self.ip_prefix)
-                #
-                # if self.check_zero(self.ip_prefix.bitarray & pattern.bitarray) == 0:
-                #     if self.check_ip_subset_deny(self.ip_prefix_deny, pattern) == 0:
-                #
-                #         if pattern.ip_prefix.prefix_type == FilterType.GE:
-                #             if self.ip_prefix.prefix_mask[0] >= pattern.prefix_mask[0]:
-                #                 self.ip_hit = 0
-                #                 # pattern is a superset of the current IP space
-                #             else:
-                #                 # self.ip_prefix.prefix_mask[0] = pattern.prefix_mask[0]
-                #                 if self.ip_prefix.prefix_mask[1] >= pattern.prefix_mask[1]:
-                #                     # pattern is a subset of the original ip space
-                #                     self.ip_prefix = pattern
-                #
-                #                 # no change to ip prefix string
-                #                 next.ip_prefix = pattern
-                #                 next.ip_prefix.prefix_mask[1] = pattern.prefix_mask[0]
-                #                 self.ip_hit = 1
-                #
-                #                 next.ip_prefix_deny.append(self.ip_prefix)
-
-            if match_type == RouteMapType.DENY:
-                if self.check_zero(self.ip_prefix.bitarray & pattern.bitarray) == 0:
-                    if self.check_ip_subset_deny(self.ip_prefix_deny, pattern) == 0:
-
-                        if pattern.ip_prefix.prefix_type == FilterType.GE:
-                            if self.ip_prefix.prefix_mask[0] >= pattern.prefix_mask[0]:
-                                self.drop_next_announcement = 1
-                                # pattern is a superset of the current IP space
-                                # drop the current announcement
+                    # limit = self.check_ip_range_overlap(self.ip_prefix.prefix_mask, pattern.prefix_mask)
+                    if limit[0] == 0:
+                        # both ip ranges are LE type
+                        ip_prefix_intersect = self.check_le_overlap(self.ip_prefix, pattern, limit)
+                        if ip_prefix_intersect != -1:
+                            if match_type == RouteMapType.PERMIT:
+                                self.equal_two_symbolic_ip(self.ip_prefix, ip_prefix_intersect)
+                                self.ip_hit = 1
+                                self.logger.debug("self ip_prefix %s" % self.ip_prefix)
                             else:
-                                # self.ip_prefix.prefix_mask[0] = pattern.prefix_mask[0]
-                                # if self.ip_prefix.prefix_mask[1] >= pattern.prefix_mask[1]:
-                                    # pattern is a subset of the original ip space
-                                    # if its the last match, then ip_hit should be 1
-                                next.ip_prefix.str_ip_bin = pattern.str_ip_prefix
-                                next.ip_prefix.prefix_mask[1] = pattern.prefix_mask[0]
-                                next.ip_prefix.bitarray = next.ip_prefix.convert_to_hsa(next.ip_prefix.str_ip_bin, next.ip_prefix.prefix_mask)
+                                # match_type == denys
+                                self.ip_hit = 1
+                                self.ip_prefix_deny.append(ip_prefix_intersect)
+                                self.logger.debug("Next announcement would deny ip_prefix %s" % ip_prefix_intersect)
 
-                        if pattern.ip_prefix.prefix_type == FilterType.LE:
-                            next.ip_prefix_deny.append(pattern)
+                            next.ip_prefix_deny.append(ip_prefix_intersect)
+                        else:
+                            # no overlap between ip prefix and pattern
+                            self.ip_hit = 0
+                    else:
+                        overlap = self.check_ge_le_overlap(self.ip_prefix, pattern, limit)
+                        if overlap == -1:
+                            # need to check up to limit[0] there is no impossible bit, otherwise the two ips don't intersect
+                            # there is no overlap
+                            self.ip_hit = 0
+                        elif match_type == RouteMapType.PERMIT:
+
+                            self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                        # else for deny no need to set ip_hit just add to the deny list
+                        else:
+                            self.ip_prefix_deny.append(overlap)
+                        self.ip_hit = 1
+                        next.ip_prefix_deny.append(overlap)
+
+                elif pattern.prefix_type == FilterType.GE:
+                    self.logger.debug("Entering LE filtering")
+                    # partially overlap
+                    overlap = self.check_ge_le_overlap(self.ip_prefix, pattern, limit)
+                    if overlap == -1:
+                        self.ip_hit = 0
+                    elif match_type == RouteMapType.PERMIT:
+
+                        self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                    else:
+                        #deny case
+                        self.ip_prefix_deny.append(overlap)
+                    self.ip_hit = 1
+                    next.ip_prefix_deny.append(overlap)
+
+
 
         elif field == RouteAnnouncementFields.NEXT_HOP:
             self.logger.debug('Before: Next hop - %s | Pattern - %s' % (self.next_hop, pattern))
