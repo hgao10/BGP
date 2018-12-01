@@ -177,7 +177,7 @@ class RouteAnnouncement(object):
                 if self.check_subset(x, ip2) == 1:
                     is_ip_subset_deny = 1
                     break
-
+        self.logger.debug("pattern is a subset of the deny list %s" % is_ip_subset_deny)
         return is_ip_subset_deny
 
     def prefix_mask_intersect(self, pattern):
@@ -305,6 +305,7 @@ class RouteAnnouncement(object):
             # no overlaps between two ips, or the pattern to be matched is already in the deny list
             if limit[0] == -1 or self.check_subset_deny(self.ip_prefix_deny, pattern) == 1:
                 self.ip_hit = 0
+                self.logger.debug("pattern is a subset of the deny list or no intersection")
             # if pattern is a superset of the current ip
             else:
                 if self.check_subset(pattern, self.ip_prefix) == 1:

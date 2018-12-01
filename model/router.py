@@ -59,7 +59,7 @@ class RouteMap(object):
         self.sequence.append(seq_number)
         self.items[seq_number] = item
 
-    def apply(self, announcement):
+    def apply(self, announcement, route_map_direction):
         # TODO add support for both deny and permit
         # TODO make sure that splitting of announcement works when there is for example a deny clause
         processed_announcements = list()
@@ -71,13 +71,18 @@ class RouteMap(object):
             route_map_item = self.items[i]
             self.logger.debug('Going to apply item seq %s in route map %s | current announcement is %s' % (i, self.name, announcement))
             processed_ann, to_be_processed_ann = route_map_item.apply(announcement)
-            self.logger.debug('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
-            print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
+
             # if route_map_item != self.items[-1]:
             if i != self.sequence[-1]:
                 announcement = to_be_processed_ann
+
             if processed_ann.ip_hit == 1:
                 processed_announcements.append(processed_ann)
+                print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
+
+            if i == self.sequence[-1] and processed_ann.ip_hit == 0 and route_map_direction == RouteMapDirection.OUT:
+                processed_announcements.append(processed_ann)
+                print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
 
             if processed_ann.drop_next_announcement == 1:
                 break

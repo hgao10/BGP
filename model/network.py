@@ -103,7 +103,7 @@ class NetworkTopology(nx.Graph):
             if (RouteMapDirection.IN, prev_router_id) in curr_router.route_maps:
                 in_map = curr_router.route_maps[(RouteMapDirection.IN, prev_router_id)]
                 print('before applying route_map_in, the announcement is', announcement)
-                local_announcements = in_map.apply(announcement)
+                local_announcements = in_map.apply(announcement, RouteMapDirection.IN)
                 print('assigning route-mapping-in to local_announcement', local_announcements)
             else:
                 local_announcements = [announcement]
@@ -122,7 +122,7 @@ class NetworkTopology(nx.Graph):
                         if (RouteMapDirection.OUT, neighbor_id) in curr_router.route_maps:
                             out_map = curr_router.route_maps[(RouteMapDirection.OUT, neighbor_id)]
                             print('going to apply OUT_MAP')
-                            export_announcements = out_map.apply(local_announcement)
+                            export_announcements = out_map.apply(local_announcement, RouteMapDirection.OUT)
                             print('OUT route map filtering', export_announcements)
                         else:
                             export_announcements = [local_announcement]
