@@ -67,6 +67,7 @@ class RouteMap(object):
         # TODO Edge case: 2 ip prefix matches with same sequence number while the first one is a superset of the second?
         # process announcements in the order of ascending sequence number
         self.sequence.sort()
+
         for i in self.sequence:
             route_map_item = self.items[i]
             self.logger.debug('Going to apply item seq %s in route map %s | current announcement is %s' % (i, self.name, announcement))
@@ -77,12 +78,13 @@ class RouteMap(object):
                 announcement = to_be_processed_ann
 
             if processed_ann.ip_hit == 1:
+
                 processed_announcements.append(processed_ann)
                 print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
 
-            if i == self.sequence[-1] and processed_ann.ip_hit == 0 and route_map_direction == RouteMapDirection.OUT:
-                processed_announcements.append(processed_ann)
-                print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
+            # if i == self.sequence[-1]:
+            #     processed_announcements.append(processed_ann)
+            #     print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
 
             if processed_ann.drop_next_announcement == 1:
                 break
@@ -106,7 +108,7 @@ class RouteMapItems(object):
             if filter_type == FilterType.EQUAL:
                 self.logger.debug('Entered filter_type == filtertype.equal if')
 
-                pattern.prefix_mask = [pattern.ip_prefix, pattern.ip_prefix]
+                pattern.prefix_mask = [pattern.prefixlen, pattern.prefixlen]
                 pattern.prefix_type = FilterType.EQUAL
 
             if filter_type == FilterType.GE:
@@ -121,12 +123,22 @@ class RouteMapItems(object):
                 pattern.prefix_type = FilterType.LE
                 self.logger.debug('pattern prefix mask is now %s' % pattern.prefix_mask)
 
-            # pattern.bitarray = pattern.convert_to_hsa(pattern.str_ip_prefix, pattern.prefix_mask)
-            self.logger.debug("Exiting...")
+        if field == RouteAnnouncementFields.NEXT_HOP:
+            self.logger.debug('Entered field : %s == RouteAnnouncementFields.NEXT_HOP and filter_type: %s and match '
+                              'type is %s' % (field, filter_type, match_type))
+
+            if filter_type != FilterType.GE:
+                self.logger.error("NEXT_HOP matches are restricted to longest prefix match, filter type should be GE")
+            else:
+                pattern.prefix_mask = [pattern.prefixlen, 32]
+                pattern.prefix_type = FilterType.GE
+                self.logger.debug("Add next hop match, pattern is %s and prefix mask is %s" % (pattern, pattern.prefix_mask))
+
         self.matches.append(tmp_rm_match)
 
     def add_action(self, field, pattern):
         tmp_rm_action = RouteMapAction(field, pattern)
+
         self.actions.append(tmp_rm_action)
 
     def apply(self, announcement):
@@ -176,4 +188,5 @@ class RouteMapAction(object):
         # should just be set, instead of filtering
         current_announcement, next_announcement = announcement.filter(self.type, self.field, self.pattern, FilterType.EQUAL)
         print('filtering routemap action item', self.field, self.pattern)
+
         return current_announcement, next_announcement

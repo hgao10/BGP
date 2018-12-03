@@ -262,6 +262,13 @@ class RouteAnnouncement(object):
 
             else: # there is no overlapping
                 overlap = -1
+        elif ip2.prefix_type == FilterType.EQUAL:
+            if zero_position +1 > ip2.prefix_mask[0]:
+                prefix = ip2.str_ip_prefix
+                overlap = SymbolicField.create_from_prefix(prefix, RouteAnnouncementFields.IP_PREFIX)
+                overlap.prefix_mask = ip2.prefix_mask
+            else:
+                overlap = -1
 
         return overlap
 
@@ -330,7 +337,7 @@ class RouteAnnouncement(object):
                                 self.logger.debug("self ip_prefix %s" % self.ip_prefix)
                             else:
                                 # match_type == denys
-                                self.ip_hit = 1
+                                self.ip_hit = 0
                                 self.ip_prefix_deny.append(ip_prefix_intersect)
                                 self.logger.debug("Next announcement would deny ip_prefix %s" % ip_prefix_intersect)
 
@@ -345,28 +352,42 @@ class RouteAnnouncement(object):
                             # there is no overlap
                             self.ip_hit = 0
                         elif match_type == RouteMapType.PERMIT:
-
+                            self.ip_hit = 1
                             self.equal_two_symbolic_ip(self.ip_prefix, overlap)
                         # else for deny no need to set ip_hit just add to the deny list
                         else:
                             self.ip_prefix_deny.append(overlap)
-                        self.ip_hit = 1
+                        #self.ip_hit = 1
                         next.ip_prefix_deny.append(overlap)
 
                 elif pattern.prefix_type == FilterType.GE:
-                    self.logger.debug("Entering LE filtering")
+                    self.logger.debug("Entering GE filtering")
                     # partially overlap
                     overlap = self.check_ge_le_overlap(self.ip_prefix, pattern, limit)
                     if overlap == -1:
                         self.ip_hit = 0
                     elif match_type == RouteMapType.PERMIT:
-
+                        self.ip_hit = 1
                         self.equal_two_symbolic_ip(self.ip_prefix, overlap)
                     else:
                         #deny case
                         self.ip_prefix_deny.append(overlap)
-                    self.ip_hit = 1
+
                     next.ip_prefix_deny.append(overlap)
+
+                elif pattern.prefix_type == FilterType.EQUAL:
+                    self.logger.debug("Entering EQUAL filtering")
+                    if self.ip_prefix.prefix_mask[0] <= pattern.prefix_mask[0] <= self.ip_prefix.prefix_mask[1]:
+                        overlap = self.check_ge_le_overlap(self.ip_prefix, pattern, limit)
+                        if overlap == -1:
+                            self.ip_hit = 0
+                        elif match_type == RouteMapType.PERMIT:
+                            self.ip_hit = 1
+                            self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                        else:
+                            self.ip_prefix_deny.append(overlap)
+
+                        next.ip_prefix_deny.append(overlap)
 
 
 

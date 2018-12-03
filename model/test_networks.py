@@ -160,10 +160,55 @@ def get_test2_network():
     network.add_peering('main', 'in_neighbor')
     network.add_peering('main', 'out_neighbor')
 
-    # expected output should be an announcement that matches 39.0.99.0/[26-32]
+    # expected output should be an announcement that matches Permit []
 
     return network
 
+def get_test9_network():
+    network = NetworkTopology('SingleRouterTwoNeighbors')
+
+    # add all internal routers and their route-maps
+    tmp_router = network.add_internal_router('main', '10.0.0.1/32', 10)
+
+    # add an import route-map
+    tmp_in_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
+
+    # add an item that only permits announcements with prefix 39.0.0.0/9 or greater
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('39.0.0.0/9', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_in_route_map.add_item(rm_items, 10)
+
+    tmp_router.add_route_map(tmp_in_route_map, RouteMapDirection.IN, '9.0.0.1')
+
+    # add an export route-map
+    tmp_out_route_map = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
+
+    # add an item that denies announcements with prefix 39.0.99.0/25 or smaller
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('39.0.99.0/25', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE)
+    tmp_out_route_map.add_item(rm_items, 10)
+
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('0.0.0.0/0', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_out_route_map.add_item(rm_items, 20)
+
+    tmp_router.add_route_map(tmp_out_route_map, RouteMapDirection.OUT, '11.0.0.1')
+
+    # add all neighboring routers that advertise and receive routes
+    network.add_external_router('in_neighbor', '9.0.0.1', 9)
+    network.add_external_router('out_neighbor', '11.0.0.1', 11)
+
+    # add the connections between the routers (e.g., full mesh between internal routers and a connection between
+    # external routers and their specific counterpart internally
+    network.add_peering('main', 'in_neighbor')
+    network.add_peering('main', 'out_neighbor')
+
+    # expected output should be an announcement that matches Permit 39.0.0.0/9 GE Deny 39.0.99.0/25 LE
+
+    return network
 
 def get_test3_network():
     network = NetworkTopology('SingleRouterTwoNeighbors')
@@ -256,11 +301,67 @@ def get_test4_network():
     network.add_peering('main', 'in_neighbor')
     network.add_peering('main', 'out_neighbor')
 
-    # expected output should be an announcement for 21.0.0.0/[9-32] with deny 21.0.20.0/[24-32], and an announcement for
-    # 39.0.0.0/[0-9]
+    # expected output should be an announcement for []
 
     return network
 
+def get_test8_network():
+    network = NetworkTopology('SingleRouterTwoNeighbors')
+
+    # add all internal routers and their route-maps
+    tmp_router = network.add_internal_router('main', '10.0.0.1/32', 10)
+
+    # add an import route-map
+    tmp_in_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
+
+    # add an item that only permits announcements with prefix 21.0.0.0/9 or greater
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('21.0.0.0/9', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_in_route_map.add_item(rm_items, 10)
+
+    # add an item that only permits announcements with prefix 21.0.20.0/24 or greater
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('21.0.20.0/24', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_in_route_map.add_item(rm_items, 20)
+
+    # add an item that only permits announcements with prefix 39.0.0.0/9 or greater
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('39.0.0.0/9', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE)
+    tmp_in_route_map.add_item(rm_items, 30)
+
+    tmp_router.add_route_map(tmp_in_route_map, RouteMapDirection.IN, '9.0.0.1')
+
+    # add an export route-map that denies announcements with prefix 21.0.20.0/24 or greater
+    tmp_out_route_map = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
+
+    # add an item that denies announcements with prefix 21.0.20.0/24 or greater
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('21.0.20.0/24', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_out_route_map.add_item(rm_items, 10)
+
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('0.0.0.0/0', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_out_route_map.add_item(rm_items, 20)
+
+    tmp_router.add_route_map(tmp_out_route_map, RouteMapDirection.OUT, '11.0.0.1')
+
+    # add all neighboring routers that advertise and receive routes
+    network.add_external_router('in_neighbor', '9.0.0.1', 9)
+    network.add_external_router('out_neighbor', '11.0.0.1', 11)
+
+    # add the connections between the routers (e.g., full mesh between internal routers and a connection between
+    # external routers and their specific counterpart internally
+    network.add_peering('main', 'in_neighbor')
+    network.add_peering('main', 'out_neighbor')
+
+    # expected output should be an announcement for [Permit 21.0.0.0/9 GE Deny 21.0.20.0/24 GE] [Permit 39.0.0.0/9 LE]
+
+    return network
 
 def get_test5_network():
     network = NetworkTopology('SingleRouterTwoNeighbors')

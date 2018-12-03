@@ -4,7 +4,7 @@
 import argparse
 import cmd
 
-from model.test_networks import get_simple_network, get_test1_network, get_test2_network, get_test3_network, get_test4_network, get_test5_network, get_test6_network, get_test7_network
+from model.test_networks import get_simple_network, get_test1_network, get_test2_network, get_test3_network, get_test4_network, get_test5_network, get_test6_network, get_test7_network, get_test8_network, get_test9_network
 
 
 class TestSuite(cmd.Cmd):
@@ -44,6 +44,10 @@ class TestSuite(cmd.Cmd):
             self.network = get_test6_network()
         elif line == 'test7':
             self.network = get_test7_network()
+        elif line == 'test8':
+            self.network = get_test8_network()
+        elif line == 'test9':
+            self.network = get_test9_network()
         else:
             print('The supplied topology is not known: %s. Try "simple" for example.' % line)
             return
