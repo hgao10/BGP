@@ -503,3 +503,71 @@ def get_test7_network():
     # expected output should be an announcement for 39.0.0.0/[0-8]
 
     return network
+
+
+def get_double_network():
+    network = NetworkTopology('TwoRoutersTwoNeighbors')
+
+    # add first internal routers and their route-maps
+    tmp_r1 = network.add_internal_router('r1', '10.0.0.1', 10)
+
+    # add an import route-map
+    tmp_in_route_map = RouteMap('IMPORT_FILTER_1', RouteMapType.PERMIT)
+
+    # add an item that only permits announcements with prefix 13.0.0.0/9 or greater
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('13.0.0.0/9', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_in_route_map.add_item(rm_items, 10)
+
+    tmp_r1.add_route_map(tmp_in_route_map, RouteMapDirection.IN, '9.0.0.1')
+
+    # add an export route-map
+    tmp_out_route_map = RouteMap('EXPORT_FILTER_1', RouteMapType.PERMIT)
+
+    # add an item that denies announcements with prefix 39.0.99.0/25 or smaller
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('13.0.0.0/24', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_out_route_map.add_item(rm_items, 10)
+
+    # add an item that permits everything
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('0.0.0.0/0', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_out_route_map.add_item(rm_items, 20)
+
+    tmp_r1.add_route_map(tmp_out_route_map, RouteMapDirection.OUT, '10.0.0.2')
+
+    # add second internal routers and their route-maps
+    tmp_r2 = network.add_internal_router('r2', '10.0.0.2', 10)
+
+    # add an import route-map
+    tmp_in_route_map = RouteMap('IMPORT_FILTER_2', RouteMapType.PERMIT)
+
+    # add an item that only permits announcements with prefix 39.0.0.0/9 or greater
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('13.0.0.0/16', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_in_route_map.add_item(rm_items, 10)
+
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('13.0.0.0/8', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    tmp_in_route_map.add_item(rm_items, 20)
+
+    tmp_r2.add_route_map(tmp_in_route_map, RouteMapDirection.IN, '10.0.0.1')
+
+    # add all neighboring routers that advertise and receive routes
+    network.add_external_router('in_neighbor', '9.0.0.1', 9)
+    network.add_external_router('out_neighbor', '11.0.0.1', 11)
+
+    # add the connections between the routers (e.g., full mesh between internal routers and a connection between
+    # external routers and their specific counterpart internally
+    network.add_peering('r1', 'in_neighbor')
+    network.add_peering('r1', 'r2')
+    network.add_peering('r2', 'out_neighbor')
+
+    # expected output should be empty
+
+    return network
