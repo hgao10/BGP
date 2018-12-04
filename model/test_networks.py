@@ -568,6 +568,6 @@ def get_double_network():
     network.add_peering('r1', 'r2')
     network.add_peering('r2', 'out_neighbor')
 
-    # expected output should be empty
+    # expected output should be [13.0.0.0/[16-32], deny: 13.0.0.0/[24-32]] and [13.0.0.0/[9-32], deny: 13.0.0.0/[16-32]]
 
     return network

@@ -4,7 +4,7 @@
 import argparse
 import cmd
 
-from model.test_networks import get_simple_network, get_test1_network, get_test2_network, get_test3_network, get_test4_network, get_test5_network, get_test6_network, get_test7_network, get_test8_network, get_test9_network
+from model.test_networks import get_simple_network, get_double_network, get_test1_network, get_test2_network, get_test3_network, get_test4_network, get_test5_network, get_test6_network, get_test7_network, get_test8_network, get_test9_network
 
 
 class TestSuite(cmd.Cmd):
@@ -30,6 +30,8 @@ class TestSuite(cmd.Cmd):
 
         if line == 'simple':
             self.network = get_simple_network()
+        elif line == 'double':
+            self.network = get_double_network()
         elif line == 'test1':
             self.network = get_test1_network()
         elif line == 'test2':
