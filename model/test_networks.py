@@ -192,6 +192,7 @@ def get_test9_network():
     rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE)
     tmp_out_route_map.add_item(rm_items, 10)
 
+    # add an item that permits everything
     rm_items = RouteMapItems()
     pattern = SymbolicField.create_from_prefix('0.0.0.0/0', RouteAnnouncementFields.IP_PREFIX)
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
@@ -347,6 +348,7 @@ def get_test8_network():
     rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
     tmp_out_route_map.add_item(rm_items, 10)
 
+    # add an item that permits everything
     rm_items = RouteMapItems()
     pattern = SymbolicField.create_from_prefix('0.0.0.0/0', RouteAnnouncementFields.IP_PREFIX)
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
