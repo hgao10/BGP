@@ -44,18 +44,24 @@ class RouteAnnouncement(object):
         else:
             self.ip_prefix = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
             self.ip_prefix_deny = []
-
             self.ip_deny_display = []
             print('fully symbolicfield for ip_prefix', self.ip_prefix)
 
         if next_hop:
             self.next_hop = SymbolicField.create_from_prefix(next_hop, RouteAnnouncementFields.NEXT_HOP)
+            self.next_hop_deny = []
+            self.next_hop_deny_display = []
+
         else:
             self.next_hop = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
+            self.next_hop_deny = []
+            self.next_hop_deny_display = []
             print('fully symbolicfield for next_hop', self.next_hop)
 
-        self.ip_hit = 0
+        self.hit = 0
+        #self.next_hop_hit = 0
         self.drop_next_announcement = 0
+        #self.drop_next_announcement_next_hop = 0
         self.as_path = as_path
         self.med = med
         self.local_pref = local_pref
@@ -109,7 +115,12 @@ class RouteAnnouncement(object):
             for x in self.ip_prefix_deny:
                 mask = str(x) + " "+str(x.prefix_mask)
                 self.ip_deny_display = ("".join(str(mask)))
-        return 'IP Prefix: %s, IP Prefix Mask: %s, IP Deny: %s, Next Hop: %s' % (self.ip_prefix, self.ip_prefix.prefix_mask, self.ip_deny_display, self.next_hop)
+        if len(self.next_hop_deny) != 0:
+            for x in self.next_hop_deny:
+                mask = str(x) + " "+str(x.prefix_mask)
+                self.next_hop_deny_display = ("".join(str(mask)))
+        return 'IP Prefix: %s, IP Prefix Mask: %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s' % (self.ip_prefix, self.ip_prefix.prefix_mask,
+                                                                                 self.ip_deny_display, self.next_hop, self.next_hop_deny_display)
 
     def __repr__(self):
         return self.__str__()
@@ -304,14 +315,14 @@ class RouteAnnouncement(object):
 
         # assume pattern can only be GE, LE or EQUAL. Currently not considering GE and LE at the match
         if field == RouteAnnouncementFields.IP_PREFIX:
-            self.ip_hit = 0
+            self.hit = 0
             self.drop_next_announcement = 0
             self.logger.debug("prefix_mask of ip1 %s" % self.ip_prefix.prefix_mask[0])
             limit = self.check_ip_range_overlap(self.ip_prefix.prefix_mask, pattern.prefix_mask)
             self.logger.debug("prefix_mask_intersect %s" % limit)
             # no overlaps between two ips, or the pattern to be matched is already in the deny list
             if limit[0] == -1 or self.check_subset_deny(self.ip_prefix_deny, pattern) == 1:
-                self.ip_hit = 0
+                self.hit = 0
                 self.logger.debug("pattern is a subset of the deny list or no intersection")
             # if pattern is a superset of the current ip
             else:
@@ -320,9 +331,9 @@ class RouteAnnouncement(object):
                     # no leftovers from current match to be passed to the next
                     self.drop_next_announcement = 1
                     if match_type == RouteMapType.PERMIT:
-                        self.ip_hit = 1
+                        self.hit = 1
                     else:
-                        self.ip_hit = 0
+                        self.hit = 0
                         # everything is denied
                 elif pattern.prefix_type == FilterType.LE:
                     self.logger.debug("Entering LE filtering")
@@ -333,68 +344,106 @@ class RouteAnnouncement(object):
                         if ip_prefix_intersect != -1:
                             if match_type == RouteMapType.PERMIT:
                                 self.equal_two_symbolic_ip(self.ip_prefix, ip_prefix_intersect)
-                                self.ip_hit = 1
+                                self.hit = 1
                                 self.logger.debug("self ip_prefix %s" % self.ip_prefix)
                             else:
                                 # match_type == denys
-                                self.ip_hit = 0
+                                self.hit = 0
                                 self.ip_prefix_deny.append(ip_prefix_intersect)
                                 self.logger.debug("Next announcement would deny ip_prefix %s" % ip_prefix_intersect)
 
                             next.ip_prefix_deny.append(ip_prefix_intersect)
                         else:
                             # no overlap between ip prefix and pattern
-                            self.ip_hit = 0
+                            self.hit = 0
                     else:
                         overlap = self.check_ge_le_overlap(self.ip_prefix, pattern, limit)
                         if overlap == -1:
                             # need to check up to limit[0] there is no impossible bit, otherwise the two ips don't intersect
                             # there is no overlap
-                            self.ip_hit = 0
-                        elif match_type == RouteMapType.PERMIT:
-                            self.ip_hit = 1
-                            self.equal_two_symbolic_ip(self.ip_prefix, overlap)
-                        # else for deny no need to set ip_hit just add to the deny list
+                            self.hit = 0
                         else:
-                            self.ip_prefix_deny.append(overlap)
-                        #self.ip_hit = 1
-                        next.ip_prefix_deny.append(overlap)
+                            if match_type == RouteMapType.PERMIT:
+                                self.hit = 1
+                                self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                            # else for deny no need to set ip_hit just add to the deny list
+                            else:
+                                self.ip_prefix_deny.append(overlap)
+                            #self.ip_hit = 1
+                            next.ip_prefix_deny.append(overlap)
 
                 elif pattern.prefix_type == FilterType.GE:
                     self.logger.debug("Entering GE filtering")
                     # partially overlap
                     overlap = self.check_ge_le_overlap(self.ip_prefix, pattern, limit)
                     if overlap == -1:
-                        self.ip_hit = 0
-                    elif match_type == RouteMapType.PERMIT:
-                        self.ip_hit = 1
-                        self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                        self.hit = 0
                     else:
-                        #deny case
-                        self.ip_prefix_deny.append(overlap)
+                        if match_type == RouteMapType.PERMIT:
+                            self.hit = 1
+                            self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                        else:
+                            #deny case
+                            self.ip_prefix_deny.append(overlap)
 
-                    next.ip_prefix_deny.append(overlap)
+                        next.ip_prefix_deny.append(overlap)
 
                 elif pattern.prefix_type == FilterType.EQUAL:
                     self.logger.debug("Entering EQUAL filtering")
                     if self.ip_prefix.prefix_mask[0] <= pattern.prefix_mask[0] <= self.ip_prefix.prefix_mask[1]:
                         overlap = self.check_ge_le_overlap(self.ip_prefix, pattern, limit)
                         if overlap == -1:
-                            self.ip_hit = 0
-                        elif match_type == RouteMapType.PERMIT:
-                            self.ip_hit = 1
-                            self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                            self.hit = 0
                         else:
-                            self.ip_prefix_deny.append(overlap)
+                            if match_type == RouteMapType.PERMIT:
+                                self.hit = 1
+                                self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                            else:
+                                self.ip_prefix_deny.append(overlap)
 
-                        next.ip_prefix_deny.append(overlap)
-
-
+                            next.ip_prefix_deny.append(overlap)
 
         elif field == RouteAnnouncementFields.NEXT_HOP:
             self.logger.debug('Before: Next hop - %s | Pattern - %s' % (self.next_hop, pattern))
-            self.next_hop.bitarray &= pattern.bitarray
-            print('after filtering next hop field', self.next_hop)
+            self.hit = 0
+            self.drop_next_announcement = 0
+            self.logger.debug("prefix_mask of ip1 %s" % self.next_hop.prefix_mask[0])
+            limit = self.check_ip_range_overlap(self.next_hop.prefix_mask, pattern.prefix_mask)
+            self.logger.debug("prefix_mask_intersect %s" % limit)
+            # no overlaps between two ips, or the pattern to be matched is already in the deny list
+            if limit[0] == -1 or self.check_subset_deny(self.next_hop_deny, pattern) == 1:
+                self.hit = 0
+                self.logger.debug("pattern is a subset of the deny list or no intersection")
+            # if pattern is a superset of the current ip
+            else:
+                if self.check_subset(pattern, self.next_hop) == 1:
+                    self.logger.debug(
+                        "pattern is a superset of the current ip. Pattern: %s | Self: %s" % (pattern, self.next_hop))
+                    # no leftovers from current match to be passed to the next
+                    self.drop_next_announcement = 1
+                    if match_type == RouteMapType.PERMIT:
+                        self.hit = 1
+                    else:
+                        self.hit = 0
+                        # everything is denied
+
+                elif pattern.prefix_type == FilterType.GE:
+                    self.logger.debug("Entering GE filtering")
+                    # partially overlap
+                    overlap = self.check_ge_le_overlap(self.next_hop, pattern, limit)
+                    if overlap == -1:
+                        self.hit = 0
+                        self.logger.debug("next_hop_hit is a miss")
+                    else:
+                        if match_type == RouteMapType.PERMIT:
+                            self.hit = 1
+                            self.equal_two_symbolic_ip(self.next_hop, overlap)
+                        else:
+                            # deny case
+                            self.next_hop_deny.append(overlap)
+
+                        next.next_hop_deny.append(overlap)
+
             self.logger.debug('After: Next hop - %s' % (self.next_hop,))
             pass
         elif field == RouteAnnouncementFields.AS_PATH:
@@ -442,7 +491,7 @@ class SymbolicField(object):
         return deepcopy_with_sharing(self, shared_attribute_names=['logger'], memo=memo)
 
     def __str__(self):
-        if self.field_type == RouteAnnouncementFields.IP_PREFIX:  # convert HSA bit array to human-readable ip-prefix
+        if self.field_type == RouteAnnouncementFields.IP_PREFIX or self.field_type == RouteAnnouncementFields.NEXT_HOP:  # convert HSA bit array to human-readable ip-prefix
             fip = self.bitarray
 
             ip_prefix = ''
@@ -465,27 +514,27 @@ class SymbolicField(object):
 
             prefix = '%s/%d' % ('.'.join(['%d' % int('0b%s' % ip_prefix[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), prefix_len)
             return prefix
-        elif self.field_type == RouteAnnouncementFields.NEXT_HOP:
-            fnexthop = self.bitarray
-            next_hop = ''
-            next_hop_len = 32
-            for i in range(0, 32):
-                # Z -> 00
-                if not fnexthop[2 * i] and not fnexthop[2 * i + 1]:
-                    print('ERROR: invalid bit found')
-                # 0 -> 01
-                elif not fnexthop[2 * i] and fnexthop[2 * i + 1]:
-                    next_hop += '0'
-                # 1 -> 10
-                elif fnexthop[2 * i] and not fnexthop[2 * i + 1]:
-                    next_hop += '1'
-                else:
-                    next_hop_len = i
-                    next_hop += '0' * (32 - next_hop_len)
-                    break
-
-            nexthop = '%s/%d' % ('.'.join(['%d' % int('0b%s' % next_hop[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), next_hop_len)
-            return nexthop
+        # elif self.field_type == RouteAnnouncementFields.NEXT_HOP:
+        #     fnexthop = self.bitarray
+        #     next_hop = ''
+        #     next_hop_len = 32
+        #     for i in range(0, 32):
+        #         # Z -> 00
+        #         if not fnexthop[2 * i] and not fnexthop[2 * i + 1]:
+        #             print('ERROR: invalid bit found')
+        #         # 0 -> 01
+        #         elif not fnexthop[2 * i] and fnexthop[2 * i + 1]:
+        #             next_hop += '0'
+        #         # 1 -> 10
+        #         elif fnexthop[2 * i] and not fnexthop[2 * i + 1]:
+        #             next_hop += '1'
+        #         else:
+        #             next_hop_len = i
+        #             next_hop += '0' * (32 - next_hop_len)
+        #             break
+        #
+        #     nexthop = '%s/%d' % ('.'.join(['%d' % int('0b%s' % next_hop[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), next_hop_len)
+        #     return nexthop
         else:
             return str(self.bitarray)
 

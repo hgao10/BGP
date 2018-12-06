@@ -77,8 +77,7 @@ class RouteMap(object):
             if i != self.sequence[-1]:
                 announcement = to_be_processed_ann
 
-            if processed_ann.ip_hit == 1:
-
+            if processed_ann.hit == 1:
                 processed_announcements.append(processed_ann)
                 print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
 
@@ -128,6 +127,7 @@ class RouteMapItems(object):
                               'type is %s' % (field, filter_type, match_type))
 
             if filter_type != FilterType.GE:
+
                 self.logger.error("NEXT_HOP matches are restricted to longest prefix match, filter type should be GE")
             else:
                 pattern.prefix_mask = [pattern.prefixlen, 32]
@@ -146,9 +146,23 @@ class RouteMapItems(object):
 
         # Applying the matches
         self.logger.debug("Read to apply routemap item, match list length: %s" % len(self.matches))
+        overrall_hit = 0
+        overrall_drop = 1
         for match in self.matches:
             tmp_announcement, next_announcement = match.apply(tmp_announcement)
+            if announcement.hit == 0:
+                overrall_hit = 0
+                break
+            else:
+                overrall_hit = 1
+            if announcement.drop_next_announcement == 0:
+                # next announcement would only be dropped if all matches with the same seq # have drop next announcement set to 1
+                overrall_drop = 0
 
+            self.logger.debug("tmp_announcement: %s| next_announcement: %s" % (tmp_announcement, next_announcement))
+
+        announcement.hit = overrall_hit
+        announcement.drop_next_announcement = overrall_drop
         # Applying the actions
         # TODO add actions
         for action in self.actions:
