@@ -4,7 +4,7 @@
 from enum import Enum
 from utils.logger import get_logger
 
-from model.announcement import FilterType, RouteAnnouncementFields
+from model.announcement import FilterType, RouteAnnouncementFields, RouteAnnouncement
 
 
 class RouterType(Enum):
@@ -146,29 +146,49 @@ class RouteMapItems(object):
 
         # Applying the matches
         self.logger.debug("Read to apply routemap item, match list length: %s" % len(self.matches))
-        overrall_hit = 0
-        overrall_drop = 1
+        overall_hit = 0
+        overall_drop = 1
+
+        item_next_announcement = RouteAnnouncement()
         for match in self.matches:
+
             tmp_announcement, next_announcement = match.apply(tmp_announcement)
+
+            self.logger.debug("after apply match on field %s, tmp_announcement: %s| next_announcement: %s" % (match.field, tmp_announcement, next_announcement))
+            if match == self.matches[0]:
+                # if its the first item in the list
+                item_next_announcement = next_announcement
+            else:
+                if match.field == RouteAnnouncementFields.IP_PREFIX:
+                    item_next_announcement.ip_prefix = next_announcement.ip_prefix
+                    item_next_announcement.ip_prefix_deny = next_announcement.ip_prefix_deny
+
+                if match.field == RouteAnnouncementFields.NEXT_HOP:
+                    item_next_announcement.next_hop = next_announcement.next_hop
+                    item_next_announcement.next_hop_deny = next_announcement.next_hop_deny
+
+            self.logger.debug("announcement hit: %s and tmp_announcement hit: %s" % (announcement.hit, tmp_announcement.hit))
             if announcement.hit == 0:
-                overrall_hit = 0
+                overall_hit = 0
                 break
             else:
-                overrall_hit = 1
+                overall_hit = 1
             if announcement.drop_next_announcement == 0:
                 # next announcement would only be dropped if all matches with the same seq # have drop next announcement set to 1
-                overrall_drop = 0
+                overall_drop = 0
 
-            self.logger.debug("tmp_announcement: %s| next_announcement: %s" % (tmp_announcement, next_announcement))
-
-        announcement.hit = overrall_hit
-        announcement.drop_next_announcement = overrall_drop
+            self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
+                match.field, item_next_announcement))
+        announcement.hit = overall_hit
+        self.logger.debug("announcement hit %s should be equal to tmp_announcement hit %s" % (announcement.hit, tmp_announcement.hit))
+        announcement.drop_next_announcement = overall_drop
         # Applying the actions
         # TODO add actions
-        for action in self.actions:
-            tmp_announcement, next_announcement = action.apply(tmp_announcement)
+        if overall_hit == 1:
+            for action in self.actions:
+                action.apply(tmp_announcement)
 
-        return tmp_announcement, next_announcement
+        return tmp_announcement, item_next_announcement
 
 
 class RouteMapMatch(object):
@@ -200,7 +220,7 @@ class RouteMapAction(object):
     def apply(self, announcement):
         # TODO implement
         # should just be set, instead of filtering
-        current_announcement, next_announcement = announcement.filter(self.type, self.field, self.pattern, FilterType.EQUAL)
-        print('filtering routemap action item', self.field, self.pattern)
-
-        return current_announcement, next_announcement
+        #current_announcement, next_announcement = announcement.filter(self.type, self.field, self.pattern, FilterType.EQUAL)
+        print('Set field %s to pattern %s' % (self.field, self.pattern))
+        announcement.set_field(self.field, self.pattern)
+        return

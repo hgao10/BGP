@@ -24,6 +24,7 @@ class RouteAnnouncementFields(Enum):
     LOCAL_PREF = 5
     COMMUNITIES = 6
 
+
 class FilterType(Enum):
     EQUAL = 1
     GE = 2
@@ -40,28 +41,29 @@ class RouteAnnouncement(object):
         if ip_prefix:
             self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix, RouteAnnouncementFields.IP_PREFIX)
             self.ip_prefix_deny = []
-            self.ip_deny_display = []
+
         else:
             self.ip_prefix = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
             self.ip_prefix_deny = []
-            self.ip_deny_display = []
             print('fully symbolicfield for ip_prefix', self.ip_prefix)
 
         if next_hop:
             self.next_hop = SymbolicField.create_from_prefix(next_hop, RouteAnnouncementFields.NEXT_HOP)
             self.next_hop_deny = []
-            self.next_hop_deny_display = []
 
         else:
             self.next_hop = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
             self.next_hop_deny = []
-            self.next_hop_deny_display = []
             print('fully symbolicfield for next_hop', self.next_hop)
 
+        if local_pref:
+            self.local_pref = local_pref
+
+        if med:
+            self.med = med
+
         self.hit = 0
-        #self.next_hop_hit = 0
         self.drop_next_announcement = 0
-        #self.drop_next_announcement_next_hop = 0
         self.as_path = as_path
         self.med = med
         self.local_pref = local_pref
@@ -90,7 +92,8 @@ class RouteAnnouncement(object):
         pass
 
     def set_next_hop(self, next_hop):
-        # TODO
+        self.next_hop = SymbolicField.create_from_prefix(next_hop, RouteAnnouncementFields.IP_PREFIX)
+        self.next_hop_deny = []
         pass
 
     def set_as_path(self, as_path):
@@ -98,11 +101,11 @@ class RouteAnnouncement(object):
         pass
 
     def set_med(self, med):
-        # TODO
+        self.med = med
         pass
 
     def set_local_pref(self, local_pref):
-        # TODO
+        self.local_pref = local_pref
         pass
 
     def set_communities(self, communities):
@@ -111,16 +114,23 @@ class RouteAnnouncement(object):
 
     def __str__(self):
         # TODO add the other fields
+        mask_ip_list = list()
+        mask_ip_list_str = "[]"
+        mask_next_hop_list = list()
+        mask_next_hop_list_str ="[]"
         if len(self.ip_prefix_deny) != 0:
             for x in self.ip_prefix_deny:
-                mask = str(x) + " "+str(x.prefix_mask)
-                self.ip_deny_display = ("".join(str(mask)))
+                mask_ip = str(x) + " "+str(x.prefix_mask)
+                mask_ip_list.append(("".join(str(mask_ip))))
+                mask_ip_list_str = ", ".join(mask_ip_list)
+
         if len(self.next_hop_deny) != 0:
             for x in self.next_hop_deny:
-                mask = str(x) + " "+str(x.prefix_mask)
-                self.next_hop_deny_display = ("".join(str(mask)))
-        return 'IP Prefix: %s, IP Prefix Mask: %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s' % (self.ip_prefix, self.ip_prefix.prefix_mask,
-                                                                                 self.ip_deny_display, self.next_hop, self.next_hop_deny_display)
+                mask_next_hop = str(x) + " "+str(x.prefix_mask)
+                mask_next_hop_list.append(("".join(str(mask_next_hop))))
+                mask_next_hop_list_str = ", ".join(mask_next_hop_list)
+        return 'IP Prefix: %s, %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s, Local Pref: %s, Med: %s' % (self.ip_prefix, self.ip_prefix.prefix_mask,
+                                                                                 mask_ip_list_str, self.next_hop, mask_next_hop_list_str, self.local_pref, self.med)
 
     def __repr__(self):
         return self.__str__()
@@ -270,6 +280,7 @@ class RouteAnnouncement(object):
                     prefix = ip1.str_ip_prefix
                 overlap = SymbolicField.create_from_prefix(prefix, RouteAnnouncementFields.IP_PREFIX)
                 overlap.prefix_mask = limit
+                self.logger.debug("Overlap prefix_mask is two prefix intersection %s" % limit)
 
             else: # there is no overlapping
                 overlap = -1
@@ -284,9 +295,10 @@ class RouteAnnouncement(object):
         return overlap
 
 
-    @ staticmethod
-    def equal_two_symbolic_ip(ip1, ip2):
+    #@ staticmethod
+    def equal_two_symbolic_ip(self, ip1, ip2):
         if ip1.str_ip_prefix == ip2.str_ip_prefix:
+            ip1.prefix_mask = ip2.prefix_mask
             return 0
         else:
             ip1.prefixlen = ip2.prefixlen
@@ -382,6 +394,7 @@ class RouteAnnouncement(object):
                         if match_type == RouteMapType.PERMIT:
                             self.hit = 1
                             self.equal_two_symbolic_ip(self.ip_prefix, overlap)
+                            self.logger.debug("self.ip_prefix %s should have the same prefix mask as overlap %s" % (self.ip_prefix.prefix_mask, overlap.prefix_mask) )
                         else:
                             #deny case
                             self.ip_prefix_deny.append(overlap)
@@ -443,15 +456,21 @@ class RouteAnnouncement(object):
                             self.next_hop_deny.append(overlap)
 
                         next.next_hop_deny.append(overlap)
+                        self.logger.debug("next hop deny has %d items" % len(next.next_hop_deny))
 
             self.logger.debug('After: Next hop - %s' % (self.next_hop,))
             pass
         elif field == RouteAnnouncementFields.AS_PATH:
             pass
         elif field == RouteAnnouncementFields.MED:
+            # if self.med == pattern:
+            #     if match_type == RouteMapType.PERMIT:
+            #         self.hit = 1
             pass
-        elif field == RouteAnnouncementFields.LOCAL_PREF:
-            pass
+
+        # No matching to local pref
+        # elif field == RouteAnnouncementFields.LOCAL_PREF:
+        #     pass
         elif field == RouteAnnouncementFields.COMMUNITIES:
             pass
         else:
@@ -514,27 +533,7 @@ class SymbolicField(object):
 
             prefix = '%s/%d' % ('.'.join(['%d' % int('0b%s' % ip_prefix[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), prefix_len)
             return prefix
-        # elif self.field_type == RouteAnnouncementFields.NEXT_HOP:
-        #     fnexthop = self.bitarray
-        #     next_hop = ''
-        #     next_hop_len = 32
-        #     for i in range(0, 32):
-        #         # Z -> 00
-        #         if not fnexthop[2 * i] and not fnexthop[2 * i + 1]:
-        #             print('ERROR: invalid bit found')
-        #         # 0 -> 01
-        #         elif not fnexthop[2 * i] and fnexthop[2 * i + 1]:
-        #             next_hop += '0'
-        #         # 1 -> 10
-        #         elif fnexthop[2 * i] and not fnexthop[2 * i + 1]:
-        #             next_hop += '1'
-        #         else:
-        #             next_hop_len = i
-        #             next_hop += '0' * (32 - next_hop_len)
-        #             break
-        #
-        #     nexthop = '%s/%d' % ('.'.join(['%d' % int('0b%s' % next_hop[j * 8:(j + 1) * 8], 2) for j in range(0, 4)]), next_hop_len)
-        #     return nexthop
+
         else:
             return str(self.bitarray)
 
