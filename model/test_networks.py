@@ -504,6 +504,7 @@ def get_test7_network():
 
     return network
 
+
 def get_nexthop1_network():
     network = NetworkTopology('SingleRouterTwoNeighbors')
 
@@ -561,6 +562,7 @@ def get_nexthop1_network():
     # expected output should be an announcement for IP: 39.0.0.0/[0-8] NEXT_HOP: 39.128.0.0/[16,32]
 
     return network
+
 
 def get_nexthop2_network():
     network = NetworkTopology('SingleRouterTwoNeighbors')
@@ -715,6 +717,7 @@ def get_set_nexthop_network():
 
     return network
 
+
 def get_set_3_fields_network():
     network = NetworkTopology('SingleRouterTwoNeighbors')
 
@@ -806,6 +809,103 @@ def get_set_3_fields_network():
 
     return network
 
+
+def get_matchmed_network():
+    network = NetworkTopology('SingleRouterTwoNeighbors')
+
+    # add all internal routers and their route-maps
+    tmp_router = network.add_internal_router('main', '10.0.0.1/32', 10)
+
+    # add an import route-map
+    tmp_in_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
+
+    # add an item that only permits announcements with prefix 39.128.0.0/16 or smaller
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('39.128.0.0/16', RouteAnnouncementFields.IP_PREFIX)
+    logger.debug("pattern: %s" % pattern)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    logger.debug("after adding match: pattern: %s" % pattern)
+    # tmp_in_route_map.add_item(rm_items, 10)
+    logger.debug("adding item in the map: %s" % pattern)
+
+    #rm_items = RouteMapItems()
+    # add an item that permits announcements with next hop 39.0.0.0 GE 8
+    pattern = SymbolicField.create_from_prefix('39.0.0.0/8', RouteAnnouncementFields.IP_PREFIX)
+    logger.debug("pattern: %s" % pattern)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.NEXT_HOP, pattern, FilterType.GE)
+    logger.debug("after adding match: pattern: %s" % pattern)
+
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.MED, 29, FilterType.EQUAL)
+    tmp_in_route_map.add_item(rm_items, 10)
+    logger.debug("adding item in the map: %s" % pattern)
+
+
+    tmp_router.add_route_map(tmp_in_route_map, RouteMapDirection.IN, '9.0.0.1')
+
+    # add an export route-map
+    tmp_out_route_map = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
+
+    # add an item that permits announcements with prefix 39.128.24.0 GE 24
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('39.128.24.0/24', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    #tmp_out_route_map.add_item(rm_items, 10)
+
+    #rm_items = RouteMapItems()
+    # add an item that permits announcements with next hop 39.127.0.0 GE 24
+    pattern = SymbolicField.create_from_prefix('39.127.1.0/24', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.NEXT_HOP, pattern, FilterType.GE)
+
+    tmp_out_route_map.add_item(rm_items, 10)
+
+    rm_items = RouteMapItems()
+    # add an item that permits announcements with next hop 39.128.0.0 GE 24
+    pattern = SymbolicField.create_from_prefix('39.128.1.0/24', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.NEXT_HOP, pattern, FilterType.GE)
+
+    # add a match that permits announcements with MED 29
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.MED, 29, FilterType.EQUAL)
+
+    rm_items.add_action(RouteAnnouncementFields.LOCAL_PREF, 150)
+
+    tmp_out_route_map.add_item(rm_items, 20)
+    tmp_router.add_route_map(tmp_out_route_map, RouteMapDirection.OUT, '11.0.0.1')
+
+    # add an item that permits announcements with ip prefix 39.128.25.0 GE 24
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('39.128.25.0/24', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+
+    # add an action that sets next_hop to 29.0.0.0/8
+    #pattern = SymbolicField.create_from_prefix('29.0.0.0/8', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_action(RouteAnnouncementFields.NEXT_HOP, '29.0.0.0/8')
+    tmp_out_route_map.add_item(rm_items, 30)
+
+    # add an item that permits everything
+    rm_items = RouteMapItems()
+    pattern = SymbolicField.create_from_prefix('0.0.0.0/0', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+
+    pattern = SymbolicField.create_from_prefix('0.0.0.0/0', RouteAnnouncementFields.IP_PREFIX)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.NEXT_HOP, pattern, FilterType.GE)
+    tmp_out_route_map.add_item(rm_items, 40)
+
+    # add all neighboring routers that advertise and receive routes
+    network.add_external_router('in_neighbor', '9.0.0.1', 9)
+    network.add_external_router('out_neighbor', '11.0.0.1', 11)
+
+    # add the connections between the routers (e.g., full mesh between internal routers and a connection between
+    # external routers and their specific counterpart internally
+    network.add_peering('main', 'in_neighbor')
+    network.add_peering('main', 'out_neighbor')
+
+    # expected output should be an announcement for:
+    #  [IP: [39.128.24.0 GE 24], IP Deny:[], NEXT_HOP: [39.127.1.0 GE 24], Next Hop Deny: [], Local Pref: [None], MED: [29]]
+    #  [IP: [39.128.0.0 GE 16], IP Deny:[39.128.24.0 GE 24], NEXT_HOP: [39.128.1.0 GE 24], Next Hop Deny: [39.127.1.0 GE 24], Local Pref: [150], MED: [29]]
+    #  [IP: [39.128.25.0 GE 24], IP Deny:[39.128.24.0 GE 24], NEXT_HOP: [29.0.0.0 GE 8], Next Hop Deny: [], Local Pref: [none], MED: [x, deny [29]]
+    #  [IP: [39.128.0.0 GE 16], IP Deny:[39.128.24.0 GE 24, 39.128.25.0 GE 24 ], NEXT_HOP: [39.0.0.0 GE 8], Next Hop Deny: [39.128.1.0 GE 24,39.127.1.0 GE 24], Local Pref: [none], MED: [x, deny 29]]
+
+    return network
 
 def get_double_network():
     network = NetworkTopology('TwoRoutersTwoNeighbors')

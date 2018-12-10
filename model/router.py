@@ -5,6 +5,7 @@ from enum import Enum
 from utils.logger import get_logger
 
 from model.announcement import FilterType, RouteAnnouncementFields, RouteAnnouncement
+import copy
 
 
 class RouterType(Enum):
@@ -142,8 +143,8 @@ class RouteMapItems(object):
         self.actions.append(tmp_rm_action)
 
     def apply(self, announcement):
-        tmp_announcement = announcement
-
+        #tmp_announcement = announcement
+        tmp_announcement = copy.deepcopy(announcement)
         # Applying the matches
         self.logger.debug("Read to apply routemap item, match list length: %s" % len(self.matches))
         overall_hit = 0
@@ -167,21 +168,36 @@ class RouteMapItems(object):
                     item_next_announcement.next_hop = next_announcement.next_hop
                     item_next_announcement.next_hop_deny = next_announcement.next_hop_deny
 
+                if match.field == RouteAnnouncementFields.MED:
+                    item_next_announcement.med = next_announcement.med
+                    item_next_announcement.med_deny = next_announcement.med_deny
+
             self.logger.debug("announcement hit: %s and tmp_announcement hit: %s" % (announcement.hit, tmp_announcement.hit))
-            if announcement.hit == 0:
+            # if announcement.hit == 0:
+            if tmp_announcement.hit == 0:
                 overall_hit = 0
                 break
             else:
                 overall_hit = 1
-            if announcement.drop_next_announcement == 0:
+            # if announcement.drop_next_announcement == 0:
+            if tmp_announcement.drop_next_announcement == 0:
                 # next announcement would only be dropped if all matches with the same seq # have drop next announcement set to 1
                 overall_drop = 0
 
             self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
                 match.field, item_next_announcement))
-        announcement.hit = overall_hit
+        # announcement.hit = overall_hit
+        tmp_announcement.hit = overall_hit
+
+
+        if tmp_announcement.hit == 0:
+            # if one of match fails, next announcement is the same as the unprocessed announcement
+            item_next_announcement = announcement
+            tmp_announcement = announcement
+
         self.logger.debug("announcement hit %s should be equal to tmp_announcement hit %s" % (announcement.hit, tmp_announcement.hit))
-        announcement.drop_next_announcement = overall_drop
+        # announcement.drop_next_announcement = overall_drop
+        tmp_announcement.drop_next_announcement = overall_drop
         # Applying the actions
         # TODO add actions
         if overall_hit == 1:
@@ -203,7 +219,7 @@ class RouteMapMatch(object):
     def apply(self, announcement):
         # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
 
-        self.logger.debug('Going to filter pattern: %s|pattern bitarray: %s| field: %s| match_type: %s' % (self.pattern, self.pattern.bitarray, self.field, self.type))
+        # self.logger.debug('Going to filter pattern: %s|pattern bitarray: %s| field: %s| match_type: %s' % (self.pattern, self.pattern.bitarray, self.field, self.type))
         processed_ann, to_be_processed_ann = announcement.filter(self.type, self.field, self.pattern)
 
         # TODO update the exclude field

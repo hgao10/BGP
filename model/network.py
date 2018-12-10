@@ -123,6 +123,7 @@ class NetworkTopology(nx.Graph):
                             out_map = curr_router.route_maps[(RouteMapDirection.OUT, neighbor_id)]
                             print('going to apply OUT_MAP')
                             export_announcements = out_map.apply(local_announcement, RouteMapDirection.OUT)
+
                             print('OUT route map filtering', export_announcements)
                         else:
                             export_announcements = [local_announcement]
