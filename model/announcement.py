@@ -505,7 +505,7 @@ class RouteAnnouncement(object):
 
                 self.logger.debug("next.med :%s | self.med %s " % (next.med, self.med))
                 # next.med_deny.append(pattern)
-                
+
             if self.med == 'x' and self.med_deny == []:  # a specific med or fully symbolic route
                 if match_type == RouteMapType.PERMIT:
                     self.med = pattern

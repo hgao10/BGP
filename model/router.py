@@ -68,23 +68,32 @@ class RouteMap(object):
         # TODO Edge case: 2 ip prefix matches with same sequence number while the first one is a superset of the second?
         # process announcements in the order of ascending sequence number
         self.sequence.sort()
+        list_to_be_processed_ann = list()
 
+        announcement_list = list()
+        announcement_list.append(announcement)
         for i in self.sequence:
             route_map_item = self.items[i]
-            self.logger.debug('Going to apply item seq %s in route map %s | current announcement is %s' % (i, self.name, announcement))
-            processed_ann, to_be_processed_ann = route_map_item.apply(announcement)
 
+            list_to_be_processed_ann.clear()
+            for ann in announcement_list:
+                self.logger.debug('Going to apply item seq %s in route map %s | current announcement is %s' % (
+                i, self.name, ann))
+                processed_ann, to_be_processed_ann = route_map_item.apply(ann)
+                #to_be_processed_ann is a list
+                if processed_ann.hit == 1:
+                    processed_announcements.append(processed_ann)
+                    print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
+                for to_be_ann in to_be_processed_ann:
+                    list_to_be_processed_ann.append(to_be_ann)
+                    self.logger.debug("append %s to list_to_be_processed" % to_be_ann)
             # if route_map_item != self.items[-1]:
             if i != self.sequence[-1]:
-                announcement = to_be_processed_ann
-
-            if processed_ann.hit == 1:
-                processed_announcements.append(processed_ann)
-                print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
-
-            # if i == self.sequence[-1]:
-            #     processed_announcements.append(processed_ann)
-            #     print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
+                announcement_list = copy.deepcopy(list_to_be_processed_ann)
+                listA = list()
+                for i in list_to_be_processed_ann:
+                    listA.append(str(i))
+                    self.logger.debug("announcement list is: %s" % (" ,".join(listA)))
 
             if processed_ann.drop_next_announcement == 1:
                 break
@@ -143,34 +152,43 @@ class RouteMapItems(object):
         self.actions.append(tmp_rm_action)
 
     def apply(self, announcement):
-        #tmp_announcement = announcement
         tmp_announcement = copy.deepcopy(announcement)
         # Applying the matches
         self.logger.debug("Read to apply routemap item, match list length: %s" % len(self.matches))
         overall_hit = 0
         overall_drop = 1
 
-        item_next_announcement = RouteAnnouncement()
+        item_next_announcements = list()
+
         for match in self.matches:
 
             tmp_announcement, next_announcement = match.apply(tmp_announcement)
 
             self.logger.debug("after apply match on field %s, tmp_announcement: %s| next_announcement: %s" % (match.field, tmp_announcement, next_announcement))
-            if match == self.matches[0]:
-                # if its the first item in the list
-                item_next_announcement = next_announcement
-            else:
-                if match.field == RouteAnnouncementFields.IP_PREFIX:
-                    item_next_announcement.ip_prefix = next_announcement.ip_prefix
-                    item_next_announcement.ip_prefix_deny = next_announcement.ip_prefix_deny
 
-                if match.field == RouteAnnouncementFields.NEXT_HOP:
-                    item_next_announcement.next_hop = next_announcement.next_hop
-                    item_next_announcement.next_hop_deny = next_announcement.next_hop_deny
+            if match.field == RouteAnnouncementFields.IP_PREFIX:
+                item_next_announcement = copy.deepcopy(announcement)
+                item_next_announcement.ip_prefix = next_announcement.ip_prefix
+                item_next_announcement.ip_prefix_deny = next_announcement.ip_prefix_deny
+                item_next_announcements.append(item_next_announcement)
+                self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
+                    match.field, item_next_announcement))
 
-                if match.field == RouteAnnouncementFields.MED:
-                    item_next_announcement.med = next_announcement.med
-                    item_next_announcement.med_deny = next_announcement.med_deny
+            if match.field == RouteAnnouncementFields.NEXT_HOP:
+                item_next_announcement = copy.deepcopy(announcement)
+                item_next_announcement.next_hop = next_announcement.next_hop
+                item_next_announcement.next_hop_deny = next_announcement.next_hop_deny
+                item_next_announcements.append(item_next_announcement)
+                self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
+                    match.field, item_next_announcement))
+
+            if match.field == RouteAnnouncementFields.MED:
+                item_next_announcement = copy.deepcopy(announcement)
+                item_next_announcement.med = next_announcement.med
+                item_next_announcement.med_deny = next_announcement.med_deny
+                item_next_announcements.append(item_next_announcement)
+                self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
+                    match.field, item_next_announcement))
 
             self.logger.debug("announcement hit: %s and tmp_announcement hit: %s" % (announcement.hit, tmp_announcement.hit))
             # if announcement.hit == 0:
@@ -184,15 +202,19 @@ class RouteMapItems(object):
                 # next announcement would only be dropped if all matches with the same seq # have drop next announcement set to 1
                 overall_drop = 0
 
-            self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
-                match.field, item_next_announcement))
+        listA= list()
+        for i in item_next_announcements:
+            listA.append(str(i))
+            self.logger.debug("item_next_announcement list: %s" % (" ,".join(listA)))
+
+
         # announcement.hit = overall_hit
         tmp_announcement.hit = overall_hit
 
-
         if tmp_announcement.hit == 0:
             # if one of match fails, next announcement is the same as the unprocessed announcement
-            item_next_announcement = announcement
+            item_next_announcements.clear()
+            item_next_announcements.append(announcement)
             tmp_announcement = announcement
 
         self.logger.debug("announcement hit %s should be equal to tmp_announcement hit %s" % (announcement.hit, tmp_announcement.hit))
@@ -204,7 +226,7 @@ class RouteMapItems(object):
             for action in self.actions:
                 action.apply(tmp_announcement)
 
-        return tmp_announcement, item_next_announcement
+        return tmp_announcement, item_next_announcements
 
 
 class RouteMapMatch(object):
