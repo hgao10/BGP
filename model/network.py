@@ -26,6 +26,11 @@ class NetworkTopology(nx.Graph):
         self.name_to_router_id = dict()
         self.router_id_to_name = dict()
 
+        self.AS_community_list = list()
+
+    def add_community_list(self, community_list):
+        self.AS_community_list = community_list[:]
+
     def add_internal_router(self, name, router_id, as_number, **attributes):
         super(NetworkTopology, self).add_node(router_id, **attributes)
 
@@ -62,7 +67,7 @@ class NetworkTopology(nx.Graph):
         else:
             self.logger.error('Either %s or %s do not exist' % (r1_id, r2_id))
 
-    def propagate_announcement(self, neighbor, announcement=None):
+    def propagate_announcement(self, neighbor, announcement=None, as_community_list=None):
         # TODO add proper copies of the announcements in the graph traversal, absolutely necessary for anything but my trivial example.
 
         # TODO properly handle announcements, every route-map is a mapping from a single announcement to multiple announcements - this has to be considered
@@ -75,6 +80,10 @@ class NetworkTopology(nx.Graph):
         if not announcement:
             announcement = RouteAnnouncement()
             print('taking the fully symbolic announcement:', announcement)
+
+        # announcement carries a list of all the available community values
+        if not as_community_list:
+            announcement = RouteAnnouncement(AS_community_list= as_community_list)
 
         # map the neighbor to the router id, if the name was supplied
         neighbor_id = self.get_router_id(neighbor)

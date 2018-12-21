@@ -36,7 +36,7 @@ class RouteAnnouncement(object):
     A BGP Route Announcement whose fields can be anywhere from fully symbolic to fully specified
     """
 
-    def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, debug=True):
+    def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, AS_community_list= None, debug=True):
         # TODO model all other fields
         self.logger = get_logger('RouteAnnouncement', 'DEBUG')
         if ip_prefix:
@@ -70,6 +70,24 @@ class RouteAnnouncement(object):
         else:
             self.med = "x"
             self.med_deny = []
+
+        if AS_community_list:
+            self.AS_community_list = AS_community_list[:]
+        else:
+            self.AS_community_list = []
+
+        if communities:
+            # map community value to community bitstring, set the corresponding bit to 1
+            self.communities = Community(self.AS_community_list )
+            # communities should be a list, currently only support to match AND type
+            # TODO add support for or
+            self.communities.set_community_values_AND(communities)
+            self.communities_deny = []
+        else:
+            # communities are 32 bit bit-string with all 1s
+            # self.communities = BitArray('int:2*16=-1')
+            self.communities = Community(self.AS_community_list)
+            self.communities_deny = []
 
         self.hit = 0
         self.drop_next_announcement = 0
@@ -117,7 +135,7 @@ class RouteAnnouncement(object):
         pass
 
     def set_communities(self, communities):
-        # TODO
+        self.communities.set_community_values_AND(communities)  # communities is a list of the actual community values
         pass
 
     def __str__(self):
@@ -129,6 +147,7 @@ class RouteAnnouncement(object):
 
         med_list = list()
         med_str = "[]"
+        community_deny_str = "[]"
         if len(self.ip_prefix_deny) != 0:
             for x in self.ip_prefix_deny:
                 mask_ip = str(x) + " "+str(x.prefix_mask)
@@ -146,8 +165,14 @@ class RouteAnnouncement(object):
                 med_list.append(str(x))
             med_str = ", ".join(med_list)
 
-        return 'IP Prefix: %s, %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s, Local Pref: %s, Med: %s, Med Deny: %s \n' % (self.ip_prefix, self.ip_prefix.prefix_mask,
-                                                                                 mask_ip_list_str, self.next_hop, mask_next_hop_list_str, self.local_pref, self.med, med_str)
+        if len(self.communities_deny) != 0:
+            for x in self.communities_deny:
+                med_list.append(str(x))
+            community_deny_str = ", ".join(self.communities_deny)
+
+        return 'IP Prefix: %s, %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s, Local Pref: %s, Med: %s, Med Deny: %s, Community: %s, ' \
+               'Community_deny: %s \n' % (self.ip_prefix,self.ip_prefix.prefix_mask,mask_ip_list_str, self.next_hop, mask_next_hop_list_str,
+            self.local_pref, self.med, med_str, self.communities, community_deny_str)
 
     def __repr__(self):
         return self.__str__()
@@ -160,10 +185,10 @@ class RouteAnnouncement(object):
 
     @staticmethod
     # check if a ip prefix bit array has any impossible bit in it
-    def check_zero(ip_prefix):
+    def check_zero(ip_prefix, length):
         zero = 0
         zero_position = 0
-        for i in range(0, 32):
+        for i in range(0, length):
             if not ip_prefix[2 * i] and not ip_prefix[2 * i + 1]:
                 zero = 1
                 zero_position = i
@@ -177,7 +202,7 @@ class RouteAnnouncement(object):
     def check_zero_list(self, ip_list, ip_prefix):
         zero=0
         for x in ip_list:
-            if self.check_zero(x.bitarray & ip_prefix.bitarray) != 0 or\
+            if self.check_zero(x.bitarray & ip_prefix.bitarray, 32) != 0 or\
                     ((x.bitarray_mask_type == FilterType.EQUAL) and (ip_prefix.bitarray_mask_type == FilterType.EQUAL)
                      and (x.bitarray != ip_prefix.bitarray)):
                 zero = 1
@@ -190,7 +215,7 @@ class RouteAnnouncement(object):
     def check_subset(self, ip1, ip2):
         # check if ip2 is a subset of ip1
         is_subset = 0
-        zero, zero_position = self.check_zero(ip1.bitarray & ip2.bitarray)
+        zero, zero_position = self.check_zero(ip1.bitarray & ip2.bitarray, 32)
         range = self.check_ip_range_overlap(ip1.prefix_mask, ip2.prefix_mask)
         if range[0] == -1:
             self.logger.error("IP mask ranges should be overlapping at this point")
@@ -231,7 +256,7 @@ class RouteAnnouncement(object):
         self.logger.debug("check le overlap, ip1.bitarray: %s and ip2.bitarray: %s" % (ip1.bitarray, ip2.bitarray))
         fip = ip1.bitarray & ip2.bitarray
 
-        zero, zero_position = self.check_zero(fip)
+        zero, zero_position = self.check_zero(fip, 32)
         self.logger.debug("zero is found %s and zero_position is %s" % (zero, zero_position))
         if limit[0] < zero_position < limit[1]:
             prefix_len = zero_position
@@ -269,7 +294,7 @@ class RouteAnnouncement(object):
         self.logger.debug("check GE LE overlap, ip1.bitarray: %s and ip2.bitarray: %s" % (ip1.bitarray, ip2.bitarray))
         fip = ip1.bitarray & ip2.bitarray
         ip_prefix = ''
-        zero, zero_position = self.check_zero(fip)
+        zero, zero_position = self.check_zero(fip, 32)
         self.logger.debug("zero is found %s and zero_position is %s" % (zero, zero_position))
         overlap = 0
         if ip2.prefix_type == FilterType.LE:
@@ -517,17 +542,72 @@ class RouteAnnouncement(object):
                 self.logger.debug("next.med :%s | self.med %s " % (next.med, self.med))
                 next.med_deny.append(pattern)
 
-
-
         # No matching to local pref
         # elif field == RouteAnnouncementFields.LOCAL_PREF:
         #     pass
+
         elif field == RouteAnnouncementFields.COMMUNITIES:
+            community_match = self.communities.match_community_values_and(pattern)
+            community_match_result = self.check_zero(community_match, 16)
+            if community_match_result == 1:
+                # match miss
+                self.hit = 0
+            else:
+                if match_type == RouteMapType.PERMIT:
+                    self.hit = 1
+                    self.communities.community_biarray.overwrite('0b'+community_match_result)
+                else:
+                    # it is a match, but its deny
+                    self.communities_deny.append(pattern) # deny list is [16:1, 16:2]
+                next.communities_deny.append(pattern)
+
             pass
         else:
             self.logger.error('Tried to set unknown field %s with value %s' % (field, pattern))
 
         return self, next
+
+
+class Community(object):
+    def __init__(self, AS_community_list):
+        self.community_bitarray = BitArray('int:32=-1')
+        self.AS_community_list = AS_community_list[:]
+
+    def match_community_values_and(self, match_list):  # match_list = ['16:1', '16:8']
+        match_bit_string = BitArray('int:32=-1')
+
+        match_item_index = list()
+        for i in match_list:
+            # represent the position of the second bit of '10'
+            match_item_index.append(self.AS_community_list.index(i) * 2 + 1)
+
+        # setting second bit to '0' to represent the match items and leave the first bit to 1
+        match_bit_string.set(False, match_item_index)
+
+        # carry out AND operation between current bitstring and match items
+        and_match_bit_string = match_bit_string & self.community_bitarray
+
+        # returns a bit string
+        return and_match_bit_string
+
+    def set_community_values_and(self, set_list):  # set_list = ['16:1', '16:2']
+
+        set_item_index_true = list()
+        set_item_index_false = list()
+        for i in set_list:
+            set_item_index_true.append(self.AS_community_list.index(i) * 2)
+            set_item_index_false.append(self.AS_community_list.index(i) * 2 +1)
+
+        self.community_bitarray.set(True, set_item_index_true)
+        self.community_bitarray.set(False, set_item_index_false)
+
+    def __str__(self):
+        contained_communities = list()
+        for i in range(16):
+            if (self.community_bitarray[i*2] is True) and (self.community_bitarray[i*2 +1] is False):
+                contained_communities.append(self.AS_community_list[i])
+
+        return ','.join(contained_communities)
 
 
 class SymbolicField(object):

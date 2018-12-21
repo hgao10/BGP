@@ -61,11 +61,8 @@ class RouteMap(object):
         self.items[seq_number] = item
 
     def apply(self, announcement, route_map_direction):
-        # TODO add support for both deny and permit
-        # TODO make sure that splitting of announcement works when there is for example a deny clause
         processed_announcements = list()
 
-        # TODO Edge case: 2 ip prefix matches with same sequence number while the first one is a superset of the second?
         # process announcements in the order of ascending sequence number
         self.sequence.sort()
         list_to_be_processed_ann = list()
