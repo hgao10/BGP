@@ -77,13 +77,17 @@ class NetworkTopology(nx.Graph):
         external_routers = defaultdict(list)
 
         # if no announcement is supplied, just take the fully symbolic one
-        if not announcement:
-            announcement = RouteAnnouncement()
-            print('taking the fully symbolic announcement:', announcement)
+        # if not announcement:
+        #     announcement = RouteAnnouncement()
+        #     print('taking the fully symbolic announcement:', announcement)
 
         # announcement carries a list of all the available community values
-        if not as_community_list:
+        if as_community_list:
+            print("creating routeannouncement with as community list")
             announcement = RouteAnnouncement(AS_community_list= as_community_list)
+
+        else:
+            announcement = RouteAnnouncement()
 
         # map the neighbor to the router id, if the name was supplied
         neighbor_id = self.get_router_id(neighbor)

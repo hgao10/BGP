@@ -73,6 +73,7 @@ class RouteAnnouncement(object):
 
         if AS_community_list:
             self.AS_community_list = AS_community_list[:]
+            self.logger.debug("Assign AS community list: %s" % self.AS_community_list)
         else:
             self.AS_community_list = []
 
@@ -80,20 +81,24 @@ class RouteAnnouncement(object):
             # map community value to community bitstring, set the corresponding bit to 1
             self.communities = Community(self.AS_community_list )
             # communities should be a list, currently only support to match AND type
-            # TODO add support for or
+            # TODO add support for OR
             self.communities.set_community_values_AND(communities)
             self.communities_deny = []
         else:
             # communities are 32 bit bit-string with all 1s
             # self.communities = BitArray('int:2*16=-1')
+            self.logger.debug("Creating a Community object with as community list %s" % self.AS_community_list)
+
             self.communities = Community(self.AS_community_list)
+
             self.communities_deny = []
+            self.logger.debug("Community bitarray: %s and As community list is %s" % (self.communities.community_bitarray, self.AS_community_list))
 
         self.hit = 0
         self.drop_next_announcement = 0
         self.as_path = as_path
 
-        self.communities = communities
+
 
         # self.logger = get_logger('RouteAnnouncement', 'DEBUG')
 
@@ -142,11 +147,13 @@ class RouteAnnouncement(object):
         # TODO add the other fields
         mask_ip_list = list()
         mask_ip_list_str = "[]"
+
         mask_next_hop_list = list()
         mask_next_hop_list_str ="[]"
 
         med_list = list()
         med_str = "[]"
+        community_deny_list = list()
         community_deny_str = "[]"
         if len(self.ip_prefix_deny) != 0:
             for x in self.ip_prefix_deny:
@@ -167,8 +174,8 @@ class RouteAnnouncement(object):
 
         if len(self.communities_deny) != 0:
             for x in self.communities_deny:
-                med_list.append(str(x))
-            community_deny_str = ", ".join(self.communities_deny)
+                community_deny_list.append(str(x))
+            community_deny_str = ", ".join(community_deny_str)
 
         return 'IP Prefix: %s, %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s, Local Pref: %s, Med: %s, Med Deny: %s, Community: %s, ' \
                'Community_deny: %s \n' % (self.ip_prefix,self.ip_prefix.prefix_mask,mask_ip_list_str, self.next_hop, mask_next_hop_list_str,
@@ -548,14 +555,15 @@ class RouteAnnouncement(object):
 
         elif field == RouteAnnouncementFields.COMMUNITIES:
             community_match = self.communities.match_community_values_and(pattern)
-            community_match_result = self.check_zero(community_match, 16)
-            if community_match_result == 1:
+            self.logger.debug("match_community_value_and : %s" % community_match)
+            zero, zero_position = self.check_zero(community_match, 16)
+            if zero == 1:
                 # match miss
                 self.hit = 0
             else:
                 if match_type == RouteMapType.PERMIT:
                     self.hit = 1
-                    self.communities.community_biarray.overwrite('0b'+community_match_result)
+                    self.communities.community_bitarray = BitArray(hex=str(community_match))
                 else:
                     # it is a match, but its deny
                     self.communities_deny.append(pattern) # deny list is [16:1, 16:2]
@@ -571,7 +579,10 @@ class RouteAnnouncement(object):
 class Community(object):
     def __init__(self, AS_community_list):
         self.community_bitarray = BitArray('int:32=-1')
+
         self.AS_community_list = AS_community_list[:]
+
+        # self.logger = get_logger('Community', 'DEBUG')
 
     def match_community_values_and(self, match_list):  # match_list = ['16:1', '16:8']
         match_bit_string = BitArray('int:32=-1')

@@ -77,8 +77,8 @@ class TestSuite(cmd.Cmd):
         """run: Run an analysis on the loaded network model by propagating a symbolic announcement"""
         if self.network:
             neighbor = 'in_neighbor'
-
-            outcome = self.network.propagate_announcement(neighbor, self.network.AS_community_list)
+            print("Propagate announcement with as community list :%s" % self.network.AS_community_list)
+            outcome = self.network.propagate_announcement(neighbor, None, self.network.AS_community_list)
 
             output = 'From %s the following announcements make it through to the other neighbors:\n\n' % (neighbor, )
             for neighbor, announcement in outcome.items():

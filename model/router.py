@@ -187,6 +187,15 @@ class RouteMapItems(object):
                 self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
                     match.field, item_next_announcement))
 
+            if match.field == RouteAnnouncementFields.COMMUNITIES:
+                item_next_announcement = copy.deepcopy(announcement)
+                item_next_announcement.communities = next_announcement.communities
+                item_next_announcement.communities_deny = next_announcement.communities_deny
+                item_next_announcement.AS_community_list = next_announcement.AS_community_list
+                item_next_announcements.append(item_next_announcement)
+                self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
+                    match.field, item_next_announcement))
+
             self.logger.debug("announcement hit: %s and tmp_announcement hit: %s" % (announcement.hit, tmp_announcement.hit))
             # if announcement.hit == 0:
             if tmp_announcement.hit == 0:
