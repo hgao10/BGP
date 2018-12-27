@@ -47,9 +47,9 @@ for bgp_config in bgp_configs:
             output += "\t%s: %s\n" % (key, value)
         output += "\n"
 
-
     # print("BGP ASN: %d - ROUTER ID: %s" % (asn, router_id))
     # print(output)
+
 
 ### PARSE ROUTE MAPS
 rm_configs = parse.find_objects("^route-map\s(\w+)\s(permit|deny)\s(\d+)$", exactmatch=True)
@@ -57,15 +57,18 @@ rm_configs = parse.find_objects("^route-map\s(\w+)\s(permit|deny)\s(\d+)$", exac
 route_maps = defaultdict()
 
 for rm_config in rm_configs:
-    rm_name = rm_config.re_match("^route-map\s(\w+)\s(permit|deny)\s(\d+)$", group=1)
-    rm_type = rm_config.re_match("^route-map\s(\w+)\s(permit|deny)\s(\d+)$", group=2)
-    rm_seq_number = int(rm_config.re_match("^route-map\s(\w+)\s(permit|deny)\s(\d+)$", group=3))
+
+    rm_regex = "^route-map\s(\w+)\s(permit|deny)\s(\d+)$"
+
+    rm_name = rm_config.re_match(rm_regex, group=1)
+    rm_type = rm_config.re_match(rm_regex, group=2)
+    rm_seq_number = int(rm_config.re_match(rm_regex, group=3))
 
     print("ROUTE-MAP: %s - %s - %d" % (rm_name, rm_type, rm_seq_number))
 
     for child in rm_config.children:
         if child.re_match("^\s*(match)"):
-            match_type = child.re_match("^\s*match\s(community|ip\saddress\sprefix-list)", group=1)
+            match_type = child.re_match("^\s*match\s(community|ip\saddress\sprefix-list|local-preference)", group=1)
             print("MATCH - %s" % match_type)
         elif child.re_match("^\s*(set)"):
             action_type = child.re_match("^\s*set\s(community|local-preference|med)", group=1)
@@ -73,3 +76,39 @@ for rm_config in rm_configs:
 
         else:
             print("UNKNOWN: Route-Map - %s" % child.text)
+
+
+### COMMUNITY-LISTS
+cl_configs = parse.find_objects("^ip\scommunity-list", exactmatch=False)
+
+community_lists = defaultdict(list)
+for cl_config in cl_configs:
+    print(cl_config)
+
+    cl_regex = "^ip\scommunity-list\s(standard\s)?(\w+)\s(deny|permit)\s(.*)$"
+
+    cl_name = cl_config.re_match(cl_regex, group=2)
+    cl_type = cl_config.re_match(cl_regex, group=3)
+    cl_list = cl_config.re_match(cl_regex, group=4)
+
+    community_lists[cl_name].append((cl_type, cl_list))
+
+### PREFIX-LISTS
+pl_configs = parse.find_objects("^ip\sprefix-list", exactmatch=False)
+
+prefix_lists = defaultdict(dict)
+for pl_config in pl_configs:
+    print(pl_config)
+
+    pl_regex = "^ip\sprefix-list\s(\w+)\sseq\s(\d{1,5})\s(deny|permit)\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2})$"
+
+    pl_name = pl_config.re_match(pl_regex, group=1)
+    pl_seq = int(pl_config.re_match(pl_regex, group=2))
+    pl_type = pl_config.re_match(pl_regex, group=3)
+    pl_prefix = pl_config.re_match(pl_regex, group=4)
+
+    prefix_lists[pl_name][pl_seq] = (pl_type, pl_prefix)
+
+for name, prefix_list in prefix_lists.items():
+    for seq, data in prefix_list.items():
+        print("PFX LIST: %s - %d - %s - %s" % (name, seq, data[0], data[1]))
