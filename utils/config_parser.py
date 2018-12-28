@@ -36,9 +36,13 @@ def load_network_from_configs(config_path, scenario_name=""):
         if filetype == 'cfg' or filetype == 'conf':
             configs.append(file_name)
 
+    logger.debug("Starting to parse %d configurations as part of the %s scenario." % (len(configs), scenario_name))
+
     parsed_configs = dict()
 
     routers = dict()
+    route_maps = dict()
+    peerings = dict()
 
     network = NetworkTopology(scenario_name)
 
@@ -51,6 +55,8 @@ def load_network_from_configs(config_path, scenario_name=""):
         router_id, asn = get_router_info(parsed_configs[config])
         routers[router_name] = network.add_internal_router(router_name, router_id, asn)
 
+        logger.debug("Parsing the config of %s with id %s and ASN %d." % (router_name, router_id, asn))
+
         # add all prefix-lists
         prefix_lists = create_prefix_lists(parsed_configs[config])
 
@@ -60,20 +66,43 @@ def load_network_from_configs(config_path, scenario_name=""):
         # add all access-lists
         access_lists = create_access_lists(parsed_configs[config])
 
+        # add all access-lists
+        as_path_lists = create_as_path_lists(parsed_configs[config])
+
         # add all route-maps
-        route_maps = create_route_maps(parsed_configs[config], prefix_lists, community_lists, access_lists)
+        route_maps[router_name] = create_route_maps(parsed_configs[config], prefix_lists, community_lists, access_lists, as_path_lists)
 
         # get BGP peerings
-        peerings, external_routers = get_bgp_peerings(parsed_configs[config])
+        local_peerings, external_routers = get_bgp_peerings(parsed_configs[config])
+
+        # store peerings for later
+        peerings[router_name] = local_peerings
 
         # add external routers
         for i, external_router in enumerate(external_routers):
             neighbor_ip, neighbor_asn = external_router
             network.add_external_router('ext_router_%d' % i, neighbor_ip, neighbor_asn)
 
-        # add all peerings (and route-maps) to the network
-        for neighbor, sessions in peerings.items():
-            network.add_peering(router_id, neighbor)
+        # output for debugging
+        logger.debug(
+            local_debug_output(
+                router_name,
+                prefix_lists,
+                community_lists,
+                access_lists,
+                as_path_lists,
+                route_maps[router_name],
+                local_peerings,
+                external_routers
+
+            )
+        )
+
+
+    # add all peerings (and route-maps) to the network
+    for router_name, local_peerings in peerings.items():
+        for neighbor, sessions in local_peerings.items():
+            network.add_peering(router_name, neighbor)
 
             # add route-maps
             for direction in [RouteMapDirection.IN, RouteMapDirection.OUT]:
@@ -81,7 +110,7 @@ def load_network_from_configs(config_path, scenario_name=""):
                     rm_name = sessions[direction]
 
                     routers[router_name].add_route_map(
-                        route_maps[rm_name],
+                        route_maps[router_name][rm_name],
                         direction,
                         neighbor
                     )
@@ -90,13 +119,19 @@ def load_network_from_configs(config_path, scenario_name=""):
 
 
 def get_router_info(parsed_config):
-    bgp_config = parsed_config.find_objects("^router\sbgp\s\d+$", exactmatch=True)[0]
-    asn = int(bgp_config.re_match("^router\sbgp\s(\d+)$", group=1))
+    bgp_configs = parsed_config.find_objects("^router\sbgp\s\d+$", exactmatch=True)
+    if bgp_configs:
+        asn = int(bgp_configs[0].re_match("^router\sbgp\s(\d+)$", group=1))
+    else:
+        asn = -1
 
-    ri_config = parsed_config.find_objects_w_parents(
+    ri_configs = parsed_config.find_objects_w_parents(
         "^router\sbgp\s\d+$",
-        "^\srouter-id\s")
-    router_id = ri_config.re_match("^\srouter-id\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$", group=1)
+        "^\sbgp\srouter-id\s")
+    if ri_configs:
+        router_id = ri_configs[0].re_match("^\sbgp\srouter-id\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$", group=1)
+    else:
+        router_id = "UNKNOWN"
 
     return router_id, asn
 
@@ -104,7 +139,8 @@ def get_router_info(parsed_config):
 def create_prefix_lists(parsed_config):
     prefix_lists = defaultdict(dict)
 
-    pl_regex = "^ip\sprefix-list\s(\w+)\sseq\s(\d{1,5})\s(deny|permit)\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2})$"
+    pl_regex = "^ip\sprefix-list\s(\w+)\sseq\s(\d{1,5})\s(deny|permit)\s" \
+               "(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/\d{1,2})(?:\sle\s(\d+))?(?:\sge\s(\d+))?$"
 
     pl_configs = parsed_config.find_objects("^ip\sprefix-list", exactmatch=False)
     for pl_config in pl_configs:
@@ -113,8 +149,14 @@ def create_prefix_lists(parsed_config):
         pl_seq = int(pl_config.re_match(pl_regex, group=2))
         pl_type = pl_config.re_match(pl_regex, group=3)
         pl_prefix = pl_config.re_match(pl_regex, group=4)
+        pl_le = pl_config.re_match(pl_regex, group=5)
+        pl_ge = pl_config.re_match(pl_regex, group=6)
 
-        prefix_lists[pl_name][pl_seq] = (pl_type, pl_prefix)
+        if pl_le and pl_ge:
+            # TODO implement
+            logger.error("At the moment, we only support LE, GE, or EQUAL match, but nothing more specific.")
+
+        prefix_lists[pl_name][pl_seq] = (pl_type, pl_prefix, pl_le, pl_ge)
 
     return prefix_lists
 
@@ -128,7 +170,7 @@ def create_community_lists(parsed_config):
     for cl_config in cl_configs:
 
         cl_name = cl_config.re_match(cl_regex, group=2)
-        cl_type = cl_config.re_match(cl_regex, group=3)
+        cl_type = get_match_type(cl_config.re_match(cl_regex, group=3))
         tmp_list = cl_config.re_match(cl_regex, group=4)
         cl_list = tmp_list.split()
 
@@ -146,7 +188,7 @@ def create_access_lists(parsed_config):
     for al_config in al_configs:
 
         al_name = al_config.re_match(al_regex, group=1)
-        al_type = al_config.re_match(al_regex, group=2)
+        al_type = get_match_type(al_config.re_match(al_regex, group=2))
         al_prefix = al_config.re_match(al_regex, group=3)
 
         access_lists[al_name].append((al_type, al_prefix))
@@ -154,7 +196,24 @@ def create_access_lists(parsed_config):
     return access_lists
 
 
-def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists):
+def create_as_path_lists(parsed_config):
+    as_path_lists = defaultdict(list)
+
+    apl_regex = "^ip\sas-path\saccess-list\s(\w+)\s(deny|permit)\s(.*)$"
+
+    apl_configs = parsed_config.find_objects("^ip\sas-path\saccess-list\s", exactmatch=False)
+    for apl_config in apl_configs:
+
+        apl_name = apl_config.re_match(apl_regex, group=1)
+        apl_type = get_match_type(apl_config.re_match(apl_regex, group=2))
+        apl_pattern = apl_config.re_match(apl_regex, group=3)
+
+        as_path_lists[apl_name].append((apl_type, apl_pattern))
+
+    return as_path_lists
+
+
+def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists, as_path_lists):
     route_maps = dict()
 
     rm_configs = parsed_config.find_objects("^route-map\s(\w+)\s(permit|deny)\s(\d+)$", exactmatch=True)
@@ -163,7 +222,7 @@ def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists
         rm_regex = "^route-map\s(\w+)\s(permit|deny)\s(\d+)$"
 
         rm_name = rm_config.re_match(rm_regex, group=1)
-        rm_type = RouteMapType.PERMIT if rm_config.re_match(rm_regex, group=2) == "permit" else RouteMapType.DENY
+        rm_type = get_match_type(rm_config.re_match(rm_regex, group=2))
 
         if rm_name not in route_maps:
             route_maps[rm_name] = RouteMap(rm_name, rm_type)
@@ -171,7 +230,7 @@ def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists
         rm_items = RouteMapItems()
         for child in rm_config.children:
             if child.re_match("^\s*(match)"):
-                match_type, field, pattern, filter_type = parse_match(child, prefix_lists, community_lists, access_lists)
+                match_type, field, pattern, filter_type = parse_match(child, prefix_lists, community_lists, access_lists, as_path_lists)
                 rm_items.add_match(match_type, field, pattern, filter_type)
 
             elif child.re_match("^\s*(set)"):
@@ -187,8 +246,8 @@ def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists
     return route_maps
 
 
-def parse_match(config_line, prefix_lists, community_lists, access_lists):
-    str_field = config_line.re_match("^\s*match\s(community|ip\saddress\sprefix-list|local-preference|metric)", group=1)
+def parse_match(config_line, prefix_lists, community_lists, access_lists, as_path_lists):
+    str_field = config_line.re_match("^\s*match\s(community|ip\saddress\sprefix-list|local-preference|metric|as-path)", group=1)
 
     if str_field == "community":
         field = RouteAnnouncementFields.COMMUNITIES
@@ -196,7 +255,8 @@ def parse_match(config_line, prefix_lists, community_lists, access_lists):
 
         cl = community_lists[cl_name]
         if len(cl) > 1:
-            logger.error("At the moment, we only support community lists that consists of a conjunction of communities, and not disjunction.")
+            logger.error("At the moment, we only support community lists "
+                         "that consists of a conjunction of communities, and not disjunction.")
 
         match_type, pattern = cl[0]
         filter_type = FilterType.GE
@@ -209,11 +269,18 @@ def parse_match(config_line, prefix_lists, community_lists, access_lists):
         if len(pl) > 1:
             logger.error("At the moment, we only support prefix lists with a single prefix.")
 
-        match_type, pl_prefix = pl.values()[0]
+        for match_type, pl_prefix, pl_le, pl_ge in pl.values():
+            break
+
         pattern = SymbolicField.create_from_prefix(pl_prefix, field)
 
-        # TODO add proper filter type parsing...
-        filter_type = FilterType.EQUAL
+        # TODO add proper filter type parsing... add support for LE and GE at the same time
+        if pl_le and not pl_ge:
+            filter_type = FilterType.LE
+        elif not pl_le and pl_ge:
+            filter_type = FilterType.GE
+        else:
+            filter_type = FilterType.EQUAL
 
     elif str_field == "ip next-hop":
         field = RouteAnnouncementFields.NEXT_HOP
@@ -227,7 +294,31 @@ def parse_match(config_line, prefix_lists, community_lists, access_lists):
         # TODO is this really supposed to be IP_PREFIX???
         pattern = SymbolicField.create_from_prefix(al_prefix, RouteAnnouncementFields.IP_PREFIX)
 
-        # TODO add proper filter type parsing...
+        filter_type = FilterType.EQUAL
+
+    elif str_field == "as-path":
+        field = RouteAnnouncementFields.AS_PATH
+        apl_name = config_line.re_match("^\s*match\sas-path\s(\w+)", group=1)
+
+        apl = as_path_lists[apl_name]
+        if len(apl) > 1:
+            logger.error("At the moment, we only support as path lists with a pattern.")
+
+        for match_type, pattern in apl:
+            break
+
+        filter_type = FilterType.EQUAL
+
+    elif str_field == "metric":
+        field = RouteAnnouncementFields.MED
+        match_type = RouteMapType.PERMIT
+        pattern = config_line.re_match("^\s*match\smetric\s(\d+)", group=1)
+        filter_type = FilterType.EQUAL
+
+    elif str_field == "local-preference":
+        field = RouteAnnouncementFields.LOCAL_PREF
+        match_type = RouteMapType.PERMIT
+        pattern = config_line.re_match("^\s*match\slocal-preference\s(\d+)", group=1)
         filter_type = FilterType.EQUAL
 
     else:
@@ -238,7 +329,10 @@ def parse_match(config_line, prefix_lists, community_lists, access_lists):
 
 
 def parse_action(config_line):
-    str_field = config_line.re_match("^\s*set\s(community|ip\snext-hop|local-preference|as-path\sprepend|metric)", group=1)
+    str_field = config_line.re_match(
+        "^\s*set\s(community|ip\snext-hop|local-preference|as-path\sprepend|metric)",
+        group=1
+    )
 
     if str_field == "community":
         field = RouteAnnouncementFields.COMMUNITIES
@@ -254,9 +348,10 @@ def parse_action(config_line):
         pattern = int(config_line.re_match("^\s*set\slocal-preference\s(\d+)$", group=1))
 
     elif str_field == "as-path prepend":
-        # TODO need to implement this one
         field = RouteAnnouncementFields.AS_PATH
-        pattern = None
+        pattern = [
+            int(asn) for asn in config_line.re_match("^\s*set\sas-path\sprepend\s((?:\d+\s?)+)$", group=1).split()
+        ]
 
     elif str_field == "metric":
         field = RouteAnnouncementFields.MED
@@ -299,7 +394,7 @@ def get_bgp_peerings(parsed_config):
             elif child.re_match("(remote-as)"):
                 neighbor_asn = int(child.re_match("remote-as\s(\d+)"))
 
-                if neighbor_asn == asn:
+                if neighbor_asn != asn:
                     external_routers.append((neighbor_ip, neighbor_asn))
 
             elif child.re_match("(update-source)"):
@@ -313,3 +408,69 @@ def get_bgp_peerings(parsed_config):
                 logger.error("UNKNOWN: %s" % (child.text))
 
     return peerings, external_routers
+
+
+def get_match_type(str_type):
+    if str_type == "permit":
+        return RouteMapType.PERMIT
+    else:
+        return RouteMapType.DENY
+
+
+def local_debug_output(
+        router,
+        prefix_lists,
+        community_lists,
+        access_lists,
+        as_path_lists,
+        route_maps,
+        local_peerings,
+        external_routers):
+
+    output = "Parsed information from %s\n" % router
+    if prefix_lists:
+        output += "PREFIX LISTS:\n"
+        for pl_name, data1 in prefix_lists.items():
+            for pl_seq, data2 in data1.items():
+                pl_type, pl_prefix, pl_le, pl_ge = data2
+                output += "\tName: %s, Seq: %d, Type: %s, Prefix: %s, LE: %s, GE: %s\n" % \
+                          (pl_name, pl_seq, pl_type, pl_prefix, pl_le, pl_ge)
+
+    if community_lists:
+        output += "COMMUNITY LISTS:\n"
+        for cl_name, community_list in community_lists.items():
+            cl_list = ", ".join("%s-%s" % (cl_type, cl_list) for cl_type, cl_list in community_list)
+            output += "\tName: %s -> %s\n" % (cl_name, cl_list)
+
+    if access_lists:
+        output += "ACCESS LISTS:\n"
+        for al_name, al_lists in access_lists.items():
+            al_list = ", ".join("%s-%s" % (al_type, al_prefix) for al_type, al_prefix in al_lists)
+            output += "\tName: %s -> %s\n" % (al_name, al_list)
+
+    if as_path_lists:
+        output += "AS PATH LISTS:\n"
+        for apl_name, apl_lists in as_path_lists.items():
+            apl_list = ", ".join("%s-%s" % (apl_type, apl_pattern) for apl_type, apl_pattern in apl_lists)
+            output += "\tName: %s -> %s\n" % (apl_name, apl_list)
+
+    if route_maps:
+        output += "ROUTE MAPS:\n"
+        for rm_name, data1 in route_maps.items():
+            output += "\tName: %s, RouteMap: %s\n" % (rm_name, data1)
+
+    if local_peerings:
+        output += "PEERINGS\n"
+        for neighbor, sessions in local_peerings.items():
+            tmp_sessions = list()
+            for direction, route_map in sessions.items():
+                if route_map:
+                    tmp_sessions.append("%s: %s" % (str(direction).split(".")[1], route_map))
+            rm_sessions = ", ".join(tmp_sessions)
+            output += "\tNeighbor: %s - %s\n" % (neighbor, rm_sessions)
+
+    if external_routers:
+        output += "EXTERNAL ROUTERS\n"
+        output += ", ".join(["%s (%s)" % (asn, ip) for ip, asn in external_routers])
+
+    return output
