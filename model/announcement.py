@@ -8,6 +8,11 @@ from bitstring import BitArray
 
 from utils.logger import get_logger
 
+from greenery.lego import parse
+from greenery import fsm
+from greenery import lego
+
+
 import copy
 
 
@@ -94,11 +99,14 @@ class RouteAnnouncement(object):
             self.communities_deny = []
             self.logger.debug("Community bitarray: %s and As community list is %s" % (self.communities.community_bitarray, self.AS_community_list))
 
+        if as_path:
+            self.as_path = AsPath(regex=as_path)
+        else:
+            self.as_path = AsPath(regex=None)
+            self.logger.debug(" Initialize as path regex to %s" % self.as_path.as_path_regex)
+
         self.hit = 0
         self.drop_next_announcement = 0
-        self.as_path = as_path
-
-
 
         # self.logger = get_logger('RouteAnnouncement', 'DEBUG')
 
@@ -114,6 +122,7 @@ class RouteAnnouncement(object):
         elif field == RouteAnnouncementFields.LOCAL_PREF:
             self.set_local_pref(value)
         elif field == RouteAnnouncementFields.COMMUNITIES:
+            # value here is a list of community strings ["16:3", "16:4"]
             self.set_communities(value)
         else:
             self.logger.error('Tried to set unknown field "%s with value "%s"' % (field, value))
@@ -140,7 +149,7 @@ class RouteAnnouncement(object):
         pass
 
     def set_communities(self, communities):
-        self.communities.set_community_values_AND(communities)  # communities is a list of the actual community values
+        self.communities.set_community_values_and(communities)  # communities is a list of the actual community values
         pass
 
     def __str__(self):
@@ -155,6 +164,9 @@ class RouteAnnouncement(object):
         med_str = "[]"
         community_deny_list = list()
         community_deny_str = "[]"
+
+        # as_path_deny_list = list()
+        # as_path_deny_str = "[]"
         if len(self.ip_prefix_deny) != 0:
             for x in self.ip_prefix_deny:
                 mask_ip = str(x) + " "+str(x.prefix_mask)
@@ -175,11 +187,16 @@ class RouteAnnouncement(object):
         if len(self.communities_deny) != 0:
             for x in self.communities_deny:
                 community_deny_list.append(str(x))
-            community_deny_str = ", ".join(community_deny_str)
+            community_deny_str = ", ".join(community_deny_list)
 
+        # if len(self.as_path_deny) != 0:
+        #     for x in self.as_path_deny:
+        #         as_path_deny_list.append(str(x))
+        #     as_path_deny_str = ", ".join(community_deny_list)
         return 'IP Prefix: %s, %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s, Local Pref: %s, Med: %s, Med Deny: %s, Community: %s, ' \
-               'Community_deny: %s \n' % (self.ip_prefix,self.ip_prefix.prefix_mask,mask_ip_list_str, self.next_hop, mask_next_hop_list_str,
-            self.local_pref, self.med, med_str, self.communities, community_deny_str)
+               'Community_deny: %s, AS Path: %s\n' % (self.ip_prefix,self.ip_prefix.prefix_mask,mask_ip_list_str, self.next_hop,
+                                                     mask_next_hop_list_str,
+            self.local_pref, self.med, med_str, self.communities, community_deny_str, self.as_path.as_path_list)
 
     def __repr__(self):
         return self.__str__()
@@ -507,8 +524,7 @@ class RouteAnnouncement(object):
 
             self.logger.debug('After: Next hop - %s' % (self.next_hop,))
             pass
-        elif field == RouteAnnouncementFields.AS_PATH:
-            pass
+
         elif field == RouteAnnouncementFields.MED:
             # fully symbolic route at the beginning
             if self.med == 'x' and len(self.med_deny) > 0:
@@ -555,6 +571,7 @@ class RouteAnnouncement(object):
 
         elif field == RouteAnnouncementFields.COMMUNITIES:
             community_match = self.communities.match_community_values_and(pattern)
+            self.hit = 0
             self.logger.debug("match_community_value_and : %s" % community_match)
             zero, zero_position = self.check_zero(community_match, 16)
             if zero == 1:
@@ -567,13 +584,88 @@ class RouteAnnouncement(object):
                 else:
                     # it is a match, but its deny
                     self.communities_deny.append(pattern) # deny list is [16:1, 16:2]
+                    self.logger.debug("Deny community pattern: %s and self.hit is %s" % (pattern, self.hit))
                 next.communities_deny.append(pattern)
 
-            pass
+        elif field == RouteAnnouncementFields.AS_PATH:
+            # check if pattern is disjoint from the current as_path
+            self.hit = 0
+            self.logger.debug("as path matching pattern is %s" % pattern)
+            pattern_regex = parse(pattern)
+            self.logger.debug("as path ' 3 ' is contained in the pattern parse %s" % pattern_regex.matches(" 3 "))
+
+            pattern_fsm = pattern_regex.to_fsm()
+            self.logger.debug("as path ' 3 ' is contained in the pattern fsm %s" % pattern_fsm.accepts(" 3 "))
+            self.logger.debug("self.as_path.as_path_regex is %s" % self.as_path.as_path_regex)
+            # self.as_path.as_path_regex = parse(".*")
+            # self.as_path.as_path_fsm = self.as_path.as_path_regex.to_fsm()
+            self.logger.debug("self.as_path.as_path_fsm is the corresponding fsm to self.as_path.as_path_regex :%s" %
+                              self.as_path.as_path_fsm.equivalent(self.as_path.as_path_regex.to_fsm()))
+            self.logger.debug("as path ' 3 4 ' is contained in the self as path fsm %s" % self.as_path.as_path_fsm.accepts(" 3 4 "))
+
+            if pattern_fsm.isdisjoint(self.as_path.as_path_fsm):
+                self.hit = 0
+                self.logger.debug("no overlap between current as path and pattern")
+            else:
+                intersect_fsm = self.as_path.as_path_fsm.intersection(pattern_fsm)
+                if pattern_fsm.issuperset(self.as_path.as_path_fsm) is True:
+                    self.drop_next_announcement = 1
+
+                if match_type == RouteMapType.PERMIT:
+                    self.hit = 1
+
+                    if self.as_path.as_path_fsm.issuperset(pattern_fsm):
+                        self.logger.debug("current as path is a supperset of matching pattern")
+
+                    self.as_path.as_path_fsm = intersect_fsm
+                    self.as_path.update_regex()
+
+                else:
+                    # deny statement and doesn't care what updating self.as_path as it won't be appended to processed packet
+                    self.hit = 0
+
+                next.as_path.as_path_fsm = self.as_path.as_path_fsm.difference(pattern_fsm)
+                next.as_path.upate_regex()
+
+
         else:
             self.logger.error('Tried to set unknown field %s with value %s' % (field, pattern))
 
         return self, next
+
+
+class AsPath(object):
+    def __init__(self, regex=None):
+        self.as_path_list = "[]"
+        if regex:
+            self.as_path_regex = parse(regex)
+        else:
+            # represent any pattern
+            self.as_path_regex = parse(".*")
+
+        self.as_path_fsm = self.as_path_regex.to_fsm()
+        self. as_path_regex_outdated = False
+
+    def prepend_as_path(self, element):
+        new_list = [element] + self.as_path_list
+        self.as_path_list = new_list[:]
+
+    def update_regex(self):
+        self.as_path_regex_outdated = False
+        try:
+            self.as_path_regex = lego.from_fsm(self.as_path_fsm)
+        except RuntimeError:
+            self.as_path_regex_outdated = True
+    # TODO figure out how to print sample as paths
+    def __str__(self):
+
+        print("as path list is: %s" % self.as_path_list)
+        if self.as_path_fsm.empty() is False:
+            print("As path regex contains non-zero as paths")
+            try:
+                print(self.as_path_regex)
+            except RuntimeError:
+                print("regex is not reducible or printable, try testing as paths with fsm.accepts()")
 
 
 class Community(object):

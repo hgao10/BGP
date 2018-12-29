@@ -168,24 +168,18 @@ class RouteMapItems(object):
                 item_next_announcement.ip_prefix = next_announcement.ip_prefix
                 item_next_announcement.ip_prefix_deny = next_announcement.ip_prefix_deny
                 item_next_announcements.append(item_next_announcement)
-                self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
-                    match.field, item_next_announcement))
 
             if match.field == RouteAnnouncementFields.NEXT_HOP:
                 item_next_announcement = copy.deepcopy(announcement)
                 item_next_announcement.next_hop = next_announcement.next_hop
                 item_next_announcement.next_hop_deny = next_announcement.next_hop_deny
                 item_next_announcements.append(item_next_announcement)
-                self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
-                    match.field, item_next_announcement))
 
             if match.field == RouteAnnouncementFields.MED:
                 item_next_announcement = copy.deepcopy(announcement)
                 item_next_announcement.med = next_announcement.med
                 item_next_announcement.med_deny = next_announcement.med_deny
                 item_next_announcements.append(item_next_announcement)
-                self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
-                    match.field, item_next_announcement))
 
             if match.field == RouteAnnouncementFields.COMMUNITIES:
                 item_next_announcement = copy.deepcopy(announcement)
@@ -193,9 +187,15 @@ class RouteMapItems(object):
                 item_next_announcement.communities_deny = next_announcement.communities_deny
                 item_next_announcement.AS_community_list = next_announcement.AS_community_list
                 item_next_announcements.append(item_next_announcement)
-                self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
-                    match.field, item_next_announcement))
 
+            if match.field == RouteAnnouncementFields.AS_PATH:
+                item_next_announcement = copy.deepcopy(announcement)
+                item_next_announcement.as_path = next_announcement.as_path
+                item_next_announcement.as_path_deny = next_announcement.as_path_deny
+                item_next_announcements.append(item_next_announcement)
+
+            self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
+                match.field, item_next_announcement))
             self.logger.debug("announcement hit: %s and tmp_announcement hit: %s" % (announcement.hit, tmp_announcement.hit))
             # if announcement.hit == 0:
             if tmp_announcement.hit == 0:
@@ -219,11 +219,11 @@ class RouteMapItems(object):
 
         if tmp_announcement.hit == 0:
             # if one of match fails, next announcement is the same as the unprocessed announcement
+            self.logger.debug("Overall hit is zero, No match for item" )
             item_next_announcements.clear()
             item_next_announcements.append(announcement)
             tmp_announcement = announcement
 
-        self.logger.debug("announcement hit %s should be equal to tmp_announcement hit %s" % (announcement.hit, tmp_announcement.hit))
         # announcement.drop_next_announcement = overall_drop
         tmp_announcement.drop_next_announcement = overall_drop
         # Applying the actions
