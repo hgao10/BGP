@@ -1066,7 +1066,7 @@ def get_matchcommunity_network():
     return network
 
 
-def get_matchaspath_network():
+def get_matchaspath1_network():
     network = NetworkTopology('SingleRouterTwoNeighbors')
 
     # add all internal routers and their route-maps
@@ -1110,7 +1110,55 @@ def get_matchaspath_network():
     network.add_peering('main', 'out_neighbor')
 
     # expected output should be an announcement that matches 39.0.99.0/[9-25]
-    # try as path space 3 space 4 space 
+    # try as path space 3 space 4 space
+
+    return network
+
+def get_matchaspath2_network():
+    network = NetworkTopology('SingleRouterTwoNeighbors')
+
+    # add all internal routers and their route-maps
+    tmp_router = network.add_internal_router('main', '10.0.0.1/32', 10)
+
+    # add an import route-map
+    tmp_in_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
+
+    # add an item that only permits announcements with prefix 39.0.0.0/9 or greater
+    rm_items = RouteMapItems()
+    # pattern = SymbolicField.create_from_prefix('39.0.0.0/9', RouteAnnouncementFields.IP_PREFIX)
+    # rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+
+    # add an item that only permits announcements with as path that includes AS 3 to pass through
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.AS_PATH, ".*\W3\W.*", FilterType.GE)
+    tmp_in_route_map.add_item(rm_items, 10)
+
+    tmp_router.add_route_map(tmp_in_route_map, RouteMapDirection.IN, '9.0.0.1')
+
+    # add an export route-map
+    tmp_out_route_map = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
+
+    # add an item that only permits announcements with prefix 39.0.99.0/25 or smaller
+    rm_items = RouteMapItems()
+    # pattern = SymbolicField.create_from_prefix('39.0.99.0/25', RouteAnnouncementFields.IP_PREFIX)
+    # rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE)
+
+    # add an item that only permits announcements with that originates from AS 3, aka _3$
+    rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.AS_PATH, ".*\W4\W", FilterType.GE)
+    tmp_out_route_map.add_item(rm_items, 10)
+
+    tmp_router.add_route_map(tmp_out_route_map, RouteMapDirection.OUT, '11.0.0.1')
+
+    # add all neighboring routers that advertise and receive routes
+    network.add_external_router('in_neighbor', '9.0.0.1', 9)
+    network.add_external_router('out_neighbor', '11.0.0.1', 11)
+
+    # add the connections between the routers (e.g., full mesh between internal routers and a connection between
+    # external routers and their specific counterpart internally
+    network.add_peering('main', 'in_neighbor')
+    network.add_peering('main', 'out_neighbor')
+
+    # expected output should be an announcement that matches 39.0.99.0/[9-25]
+    # try as path space 3 space 4 space
 
     return network
 

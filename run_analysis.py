@@ -7,7 +7,7 @@ import cmd
 from model.test_networks import get_simple_network, get_double_network, get_test1_network, get_test2_network, \
     get_test3_network, get_test4_network, get_test5_network, get_test6_network, get_test7_network, get_test8_network, \
     get_test9_network, get_nexthop1_network, get_nexthop2_network, get_set_nexthop_network, get_set_3_fields_network, \
-    get_matchmed_network, get_matchapply_network, get_matchcommunity_network, get_matchaspath_network
+    get_matchmed_network, get_matchapply_network, get_matchcommunity_network, get_matchaspath1_network, get_matchaspath2_network
 
 
 class TestSuite(cmd.Cmd):
@@ -68,8 +68,10 @@ class TestSuite(cmd.Cmd):
         elif line == 'matchcommunity':
             self.network = get_matchcommunity_network()
 
-        elif line == 'matchaspath':
-            self.network = get_matchaspath_network()
+        elif line == 'matchaspath1':
+            self.network = get_matchaspath1_network()
+        elif line == 'matchaspath2':
+            self.network = get_matchaspath2_network()
         else:
             print('The supplied topology is not known: %s. Try "simple" for example.' % line)
             return
