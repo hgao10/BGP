@@ -116,7 +116,9 @@ class NetworkTopology(nx.Graph):
             if (RouteMapDirection.IN, prev_router_id) in curr_router.route_maps:
                 in_map = curr_router.route_maps[(RouteMapDirection.IN, prev_router_id)]
                 print('before applying route_map_in, the announcement is', announcement)
+                announcement.as_path.check_fsm()
                 local_announcements = in_map.apply(announcement, RouteMapDirection.IN)
+                announcement.as_path.check_fsm()
                 print('assigning route-mapping-in to local_announcement', local_announcements)
             else:
                 local_announcements = [announcement]

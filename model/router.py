@@ -149,7 +149,12 @@ class RouteMapItems(object):
         self.actions.append(tmp_rm_action)
 
     def apply(self, announcement):
+        announcement.as_path.check_fsm("Before copy announcement")
+        original_fsm = announcement.as_path.as_path_fsm
         tmp_announcement = copy.deepcopy(announcement)
+        tmp_announcement.as_path.as_path_fsm = original_fsm
+        tmp_announcement.as_path.check_fsm("After copy tmp announcement")
+
         # Applying the matches
         self.logger.debug("Read to apply routemap item, match list length: %s" % len(self.matches))
         overall_hit = 0
@@ -167,32 +172,33 @@ class RouteMapItems(object):
                 item_next_announcement = copy.deepcopy(announcement)
                 item_next_announcement.ip_prefix = next_announcement.ip_prefix
                 item_next_announcement.ip_prefix_deny = next_announcement.ip_prefix_deny
-                item_next_announcements.append(item_next_announcement)
 
             if match.field == RouteAnnouncementFields.NEXT_HOP:
                 item_next_announcement = copy.deepcopy(announcement)
                 item_next_announcement.next_hop = next_announcement.next_hop
                 item_next_announcement.next_hop_deny = next_announcement.next_hop_deny
-                item_next_announcements.append(item_next_announcement)
 
             if match.field == RouteAnnouncementFields.MED:
                 item_next_announcement = copy.deepcopy(announcement)
                 item_next_announcement.med = next_announcement.med
                 item_next_announcement.med_deny = next_announcement.med_deny
-                item_next_announcements.append(item_next_announcement)
 
             if match.field == RouteAnnouncementFields.COMMUNITIES:
                 item_next_announcement = copy.deepcopy(announcement)
                 item_next_announcement.communities = next_announcement.communities
                 item_next_announcement.communities_deny = next_announcement.communities_deny
                 item_next_announcement.AS_community_list = next_announcement.AS_community_list
-                item_next_announcements.append(item_next_announcement)
 
             if match.field == RouteAnnouncementFields.AS_PATH:
                 item_next_announcement = copy.deepcopy(announcement)
                 item_next_announcement.as_path = next_announcement.as_path
-                item_next_announcement.as_path_deny = next_announcement.as_path_deny
-                item_next_announcements.append(item_next_announcement)
+
+            if match.field != RouteAnnouncementFields.AS_PATH:
+                # restore changes brought by deepcopy
+                item_next_announcement.as_path.as_path_fsm = original_fsm
+                item_next_announcement.as_path.check_fsm("After copy item next announcement")
+
+            item_next_announcements.append(item_next_announcement)
 
             self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
                 match.field, item_next_announcement))

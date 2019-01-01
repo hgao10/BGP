@@ -1077,8 +1077,8 @@ def get_matchaspath_network():
 
     # add an item that only permits announcements with prefix 39.0.0.0/9 or greater
     rm_items = RouteMapItems()
-    pattern = SymbolicField.create_from_prefix('39.0.0.0/9', RouteAnnouncementFields.IP_PREFIX)
-    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
+    # pattern = SymbolicField.create_from_prefix('39.0.0.0/9', RouteAnnouncementFields.IP_PREFIX)
+    # rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.GE)
 
     # add an item that only permits announcements with as path that includes AS 3 to pass through
     rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.AS_PATH, ".*\W3\W.*", FilterType.GE)
@@ -1091,11 +1091,11 @@ def get_matchaspath_network():
 
     # add an item that only permits announcements with prefix 39.0.99.0/25 or smaller
     rm_items = RouteMapItems()
-    pattern = SymbolicField.create_from_prefix('39.0.99.0/25', RouteAnnouncementFields.IP_PREFIX)
-    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE)
+    # pattern = SymbolicField.create_from_prefix('39.0.99.0/25', RouteAnnouncementFields.IP_PREFIX)
+    # rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.IP_PREFIX, pattern, FilterType.LE)
 
     # add an item that only permits announcements with that originates from AS 3, aka _3$
-    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.AS_PATH, ".*\W3\W", FilterType.GE)
+    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.AS_PATH, ".*\W4\W", FilterType.GE)
     tmp_out_route_map.add_item(rm_items, 10)
 
     tmp_router.add_route_map(tmp_out_route_map, RouteMapDirection.OUT, '11.0.0.1')
@@ -1109,7 +1109,8 @@ def get_matchaspath_network():
     network.add_peering('main', 'in_neighbor')
     network.add_peering('main', 'out_neighbor')
 
-    # expected output should be an announcement that matches 39.0.99.0/[9-25], AS path _3$
+    # expected output should be an announcement that matches 39.0.99.0/[9-25]
+    # try as path space 3 space 4 space 
 
     return network
 

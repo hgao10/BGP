@@ -85,10 +85,22 @@ class TestSuite(cmd.Cmd):
 
             output = 'From %s the following announcements make it through to the other neighbors:\n\n' % (neighbor, )
             for neighbor, announcement in outcome.items():
+
                 output += '\t%s: %s\n' % (neighbor, announcement)
+                for announcement_element in announcement:
+                    print('announcement %d is %s' % (announcement.index(announcement_element), announcement))
+                    test_as_path = input("Input as path to test the FSM for the as path\n")
+                    result = announcement_element.as_path.as_path_fsm.accepts(test_as_path)
+                    if result is True:
+                        print("test as path %s is accepted" % test_as_path)
+                    else:
+                        print("test as path %s is not accepted" % test_as_path)
+
             print(output)
         else:
             print('You need to load a network model before you can run the symbolic execution.')
+
+
 
 
 if __name__ == "__main__":

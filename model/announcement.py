@@ -11,6 +11,17 @@ from utils.logger import get_logger
 from greenery.lego import parse
 from greenery import fsm
 from greenery import lego
+from colorama import Fore
+from colorama import Style
+import sys
+
+def eprint(*args, **kwargs):
+    print(Fore.RED, *args, Style.RESET_ALL, file=sys.stderr, **kwargs)
+
+
+def debug(*args, **kwargs):
+    print(Fore.YELLOW, *args, Style.RESET_ALL, file=sys.stderr, **kwargs)
+
 
 
 import copy
@@ -104,6 +115,9 @@ class RouteAnnouncement(object):
         else:
             self.as_path = AsPath(regex=None)
             self.logger.debug(" Initialize as path regex to %s" % self.as_path.as_path_regex)
+
+
+        self.as_path.check_fsm('constructor')
 
         self.hit = 0
         self.drop_next_announcement = 0
@@ -386,8 +400,11 @@ class RouteAnnouncement(object):
     # match type could be eq, ge, le
     def filter(self, match_type, field, pattern):
         # TODO
-        print("Doing deep copy")
+        self.as_path.check_fsm('filter')
+        original_fsm = self.as_path.as_path_fsm
         next = copy.deepcopy(self)
+        next.as_path.as_path_fsm = original_fsm
+        next.as_path.check_fsm('filter deep copy next')
         print("Done deep copy")
 
         # assume pattern can only be GE, LE or EQUAL. Currently not considering GE and LE at the match
@@ -597,10 +614,21 @@ class RouteAnnouncement(object):
             pattern_fsm = pattern_regex.to_fsm()
             self.logger.debug("as path ' 3 ' is contained in the pattern fsm %s" % pattern_fsm.accepts(" 3 "))
             self.logger.debug("self.as_path.as_path_regex is %s" % self.as_path.as_path_regex)
+            self.logger.debug("self.as_path.as_path_regex outdated is %s" % self.as_path.as_path_regex_outdated)
+
             # self.as_path.as_path_regex = parse(".*")
             # self.as_path.as_path_fsm = self.as_path.as_path_regex.to_fsm()
-            self.logger.debug("self.as_path.as_path_fsm is the corresponding fsm to self.as_path.as_path_regex :%s" %
-                              self.as_path.as_path_fsm.equivalent(self.as_path.as_path_regex.to_fsm()))
+            # self.logger.debug("self.as_path.as_path_fsm is the corresponding fsm to self.as_path.as_path_regex :%s" %
+            #                   self.as_path.as_path_fsm.equivalent(self.as_path.as_path_regex.to_fsm()))
+            self.as_path.check_fsm('announcement')
+
+            # self.logger.debug("as path regex DUMMY is to the regex %s" % (self.as_path.as_path_regex.equivalent(self.as_path.as_path_regex_dummy)))
+
+            try:
+                regex = lego.from_fsm(self.as_path.as_path_fsm)
+                print("self.self.as_path.as_path_fsm converts to regex" % regex)
+            except Exception:
+                print ("unable to produce a regex from current self.as_path.as_path_fsm")
             self.logger.debug("as path ' 3 4 ' is contained in the self as path fsm %s" % self.as_path.as_path_fsm.accepts(" 3 4 "))
 
             if pattern_fsm.isdisjoint(self.as_path.as_path_fsm):
@@ -624,14 +652,34 @@ class RouteAnnouncement(object):
                     # deny statement and doesn't care what updating self.as_path as it won't be appended to processed packet
                     self.hit = 0
 
+                next.as_path.check_fsm('next announcement')
                 next.as_path.as_path_fsm = self.as_path.as_path_fsm.difference(pattern_fsm)
-                next.as_path.upate_regex()
 
+                next.as_path.update_regex()
 
         else:
             self.logger.error('Tried to set unknown field %s with value %s' % (field, pattern))
 
         return self, next
+
+class Watcher:
+    """ A simple class, set to watch its variable. """
+    def __init__(self, value):
+        self.variable = value
+
+    def set_value(self, new_value):
+        if self.value != new_value:
+            self.pre_change()
+            self.variable = new_value
+            self.post_change()
+
+    def pre_change(self):
+        # do stuff before variable is about to be changed
+        print("Variable is about to change!!")
+
+    def post_change(self):
+        # do stuff right after variable has changed
+        print("Variable has changed!!")
 
 
 class AsPath(object):
@@ -644,26 +692,39 @@ class AsPath(object):
             self.as_path_regex = parse(".*")
 
         self.as_path_fsm = self.as_path_regex.to_fsm()
+        print ("initialize as path fsm from regex %s" % self.as_path_regex)
+        print ("initialized as path fsm accepts ' 3 4' %s" % self.as_path_fsm.accepts(" 3 4 "))
+
+
         self. as_path_regex_outdated = False
+
+    def check_fsm(self, caller='main'):
+        debug ("%s as path fsm is the corresponding fsm to the regex %s"
+               % (caller, self.as_path_fsm.equivalent(self.as_path_regex.to_fsm())))
+
 
     def prepend_as_path(self, element):
         new_list = [element] + self.as_path_list
         self.as_path_list = new_list[:]
 
     def update_regex(self):
-        self.as_path_regex_outdated = False
+        # self.as_path_regex_outdated = False
         try:
             self.as_path_regex = lego.from_fsm(self.as_path_fsm)
+            self.as_path_regex_outdated = False
         except RuntimeError:
             self.as_path_regex_outdated = True
+
     # TODO figure out how to print sample as paths
     def __str__(self):
-
         print("as path list is: %s" % self.as_path_list)
         if self.as_path_fsm.empty() is False:
             print("As path regex contains non-zero as paths")
             try:
-                print(self.as_path_regex)
+                if self.as_path_regex_outdated is True:
+                    print(lego.from_fsm(self.as_path_fsm))
+                else:
+                    print(self.as_path_regex)
             except RuntimeError:
                 print("regex is not reducible or printable, try testing as paths with fsm.accepts()")
 
