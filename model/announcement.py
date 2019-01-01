@@ -151,7 +151,8 @@ class RouteAnnouncement(object):
         pass
 
     def set_as_path(self, as_path):
-        # TODO
+        self.as_path.prepend_as_path(as_path)
+
         pass
 
     def set_med(self, med):
@@ -203,14 +204,10 @@ class RouteAnnouncement(object):
                 community_deny_list.append(str(x))
             community_deny_str = ", ".join(community_deny_list)
 
-        # if len(self.as_path_deny) != 0:
-        #     for x in self.as_path_deny:
-        #         as_path_deny_list.append(str(x))
-        #     as_path_deny_str = ", ".join(community_deny_list)
         return 'IP Prefix: %s, %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s, Local Pref: %s, Med: %s, Med Deny: %s, Community: %s, ' \
                'Community_deny: %s, AS Path: %s\n' % (self.ip_prefix,self.ip_prefix.prefix_mask,mask_ip_list_str, self.next_hop,
                                                      mask_next_hop_list_str,
-            self.local_pref, self.med, med_str, self.communities, community_deny_str, self.as_path.as_path_list)
+            self.local_pref, self.med, med_str, self.communities, community_deny_str, ",".join(self.as_path.as_path_list))
 
     def __repr__(self):
         return self.__str__()
@@ -637,6 +634,7 @@ class RouteAnnouncement(object):
             else:
                 intersect_fsm = self.as_path.as_path_fsm.intersection(pattern_fsm)
                 if pattern_fsm.issuperset(self.as_path.as_path_fsm) is True:
+                    self.logger.debug("current pattern is a superset of current as path fsm")
                     self.drop_next_announcement = 1
 
                 if match_type == RouteMapType.PERMIT:
@@ -656,35 +654,17 @@ class RouteAnnouncement(object):
                 next.as_path.as_path_fsm = self.as_path.as_path_fsm.difference(pattern_fsm)
 
                 next.as_path.update_regex()
+                self.logger.debug("self.drop_next_announcement %s" % self.drop_next_announcement)
 
         else:
             self.logger.error('Tried to set unknown field %s with value %s' % (field, pattern))
 
         return self, next
 
-class Watcher:
-    """ A simple class, set to watch its variable. """
-    def __init__(self, value):
-        self.variable = value
-
-    def set_value(self, new_value):
-        if self.value != new_value:
-            self.pre_change()
-            self.variable = new_value
-            self.post_change()
-
-    def pre_change(self):
-        # do stuff before variable is about to be changed
-        print("Variable is about to change!!")
-
-    def post_change(self):
-        # do stuff right after variable has changed
-        print("Variable has changed!!")
-
 
 class AsPath(object):
     def __init__(self, regex=None):
-        self.as_path_list = "[]"
+        self.as_path_list = list()
         if regex:
             self.as_path_regex = parse(regex)
         else:
@@ -695,13 +675,11 @@ class AsPath(object):
         print ("initialize as path fsm from regex %s" % self.as_path_regex)
         print ("initialized as path fsm accepts ' 3 4' %s" % self.as_path_fsm.accepts(" 3 4 "))
 
-
         self. as_path_regex_outdated = False
 
     def check_fsm(self, caller='main'):
         debug ("%s as path fsm is the corresponding fsm to the regex %s"
                % (caller, self.as_path_fsm.equivalent(self.as_path_regex.to_fsm())))
-
 
     def prepend_as_path(self, element):
         new_list = [element] + self.as_path_list

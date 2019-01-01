@@ -86,7 +86,8 @@ class RouteMap(object):
                     self.logger.debug("append %s to list_to_be_processed" % to_be_ann)
             # if route_map_item != self.items[-1]:
             if i != self.sequence[-1]:
-                announcement_list = copy.deepcopy(list_to_be_processed_ann)
+                # announcement_list = copy.deepcopy(list_to_be_processed_ann)
+                announcement_list = list_to_be_processed_ann[:]
 
                 # can above be replaced with announcement_list = list_to_be_processed_ann[:] to avoid using deepcopy??? or simply copy to avoid
                 # alter fsm
@@ -97,6 +98,7 @@ class RouteMap(object):
                     self.logger.debug("announcement list is: %s" % (" ,".join(listA)))
 
             if processed_ann.drop_next_announcement == 1:
+                print("break from routemapapply ")
                 break
 
         return processed_announcements
@@ -206,17 +208,24 @@ class RouteMapItems(object):
 
             self.logger.debug("after apply match on field %s, item_next_announcement: %s" % (
                 match.field, item_next_announcement))
+
+            # if announcement.drop_next_announcement == 0:
+            if tmp_announcement.drop_next_announcement == 0:
+                # next announcement would only be dropped if all matches with the same seq # have drop next announcement set to 1
+                overall_drop = 0
+
             self.logger.debug("announcement hit: %s and tmp_announcement hit: %s" % (announcement.hit, tmp_announcement.hit))
+
+            # this needs to be checked after drop next announcement, otherwise a deny clause would result in dropping the next announcement because
+            #  of break statement
             # if announcement.hit == 0:
             if tmp_announcement.hit == 0:
                 overall_hit = 0
                 break
             else:
                 overall_hit = 1
-            # if announcement.drop_next_announcement == 0:
-            if tmp_announcement.drop_next_announcement == 0:
-                # next announcement would only be dropped if all matches with the same seq # have drop next announcement set to 1
-                overall_drop = 0
+
+
 
         listA= list()
         for i in item_next_announcements:

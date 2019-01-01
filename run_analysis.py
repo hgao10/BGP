@@ -7,7 +7,8 @@ import cmd
 from model.test_networks import get_simple_network, get_double_network, get_test1_network, get_test2_network, \
     get_test3_network, get_test4_network, get_test5_network, get_test6_network, get_test7_network, get_test8_network, \
     get_test9_network, get_nexthop1_network, get_nexthop2_network, get_set_nexthop_network, get_set_3_fields_network, \
-    get_matchmed_network, get_matchapply_network, get_matchcommunity_network, get_matchaspath1_network, get_matchaspath2_network
+    get_matchmed_network, get_matchapply_network, get_matchcommunity_network, get_matchaspath1_network, get_matchaspath2_network, \
+    get_matchaspath3_network, get_matchaspath4_network
 
 
 class TestSuite(cmd.Cmd):
@@ -72,6 +73,10 @@ class TestSuite(cmd.Cmd):
             self.network = get_matchaspath1_network()
         elif line == 'matchaspath2':
             self.network = get_matchaspath2_network()
+        elif line == 'matchaspath3':
+            self.network = get_matchaspath3_network()
+        elif line == 'matchaspath4':
+            self.network = get_matchaspath4_network()
         else:
             print('The supplied topology is not known: %s. Try "simple" for example.' % line)
             return
@@ -91,18 +96,22 @@ class TestSuite(cmd.Cmd):
                 output += '\t%s: %s\n' % (neighbor, announcement)
                 for announcement_element in announcement:
                     print('announcement %d is %s' % (announcement.index(announcement_element), announcement))
-                    test_as_path = input("Input as path to test the FSM for the as path\n")
-                    result = announcement_element.as_path.as_path_fsm.accepts(test_as_path)
-                    if result is True:
-                        print("test as path %s is accepted" % test_as_path)
-                    else:
-                        print("test as path %s is not accepted" % test_as_path)
+
+                    # Ask user for as path test strings until one is accepted by the fsm
+                    result = False
+                    i = 0
+                    while result is False:
+                        if i == 0:
+                            i = 1
+                        else:
+                            print("test as path %s is not accepted, please input new as path\n" % test_as_path)
+                        test_as_path = input("Input as path to test the FSM for the as path\n")
+                        result = announcement_element.as_path.as_path_fsm.accepts(test_as_path)
+                    print("test as path %s is accepted" % test_as_path)
 
             print(output)
         else:
             print('You need to load a network model before you can run the symbolic execution.')
-
-
 
 
 if __name__ == "__main__":
