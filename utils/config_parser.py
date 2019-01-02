@@ -106,7 +106,6 @@ def load_network_from_configs(config_path, scenario_name=""):
             )
         )
 
-
     # add all peerings (and route-maps) to the network
     for router_name, local_peerings in peerings.items():
         for neighbor, sessions in local_peerings.items():
@@ -254,7 +253,7 @@ def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists
 
             elif child.re_match("^\s*(set)"):
                 field, pattern, tmp_communities = parse_action(child)
-                communities.union(tmp_communities)
+                communities |= tmp_communities
 
                 rm_items.add_action(field, pattern)
 

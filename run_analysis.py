@@ -97,7 +97,7 @@ class TestSuite(cmd.Cmd):
 
         print('Loaded %s topology with %d nodes and %d edges.' % (self.network.name, len(self.network.nodes), len(self.network.edges)))
 
-    def do_neighbors(self):
+    def do_neighbors(self, line):
         if self.network:
             neighbors = self.network.get_external_routers()
             print("The network has the following neighbors: %s" % (", ".join([str(neighbor) for neighbor in neighbors])))
