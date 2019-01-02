@@ -88,10 +88,6 @@ class RouteMap(object):
             if i != self.sequence[-1]:
                 # announcement_list = copy.deepcopy(list_to_be_processed_ann)
                 announcement_list = list_to_be_processed_ann[:]
-
-                # can above be replaced with announcement_list = list_to_be_processed_ann[:] to avoid using deepcopy??? or simply copy to avoid
-                # alter fsm
-
                 listA = list()
                 for i in list_to_be_processed_ann:
                     listA.append(str(i))
