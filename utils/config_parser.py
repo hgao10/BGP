@@ -223,9 +223,14 @@ def create_as_path_lists(parsed_config):
         apl_type = get_match_type(apl_config.re_match(apl_regex, group=2))
         apl_pattern = apl_config.re_match(apl_regex, group=3)
 
-        as_path_lists[apl_name].append((apl_type, apl_pattern))
+        as_path_lists[apl_name].append((apl_type, map_pattern_to_regex(apl_pattern)))
 
     return as_path_lists
+
+
+def map_pattern_to_regex(pattern):
+    regex = pattern.replace("_", ".*\W")
+    return regex
 
 
 def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists, as_path_lists):
