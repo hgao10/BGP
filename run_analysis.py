@@ -3,12 +3,15 @@
 
 import argparse
 import cmd
+import os
 
 from model.test_networks import get_simple_network, get_double_network, get_test1_network, get_test2_network, \
     get_test3_network, get_test4_network, get_test5_network, get_test6_network, get_test7_network, get_test8_network, \
     get_test9_network, get_nexthop1_network, get_nexthop2_network, get_set_nexthop_network, get_set_3_fields_network, \
     get_matchmed_network, get_matchapply_network, get_matchcommunity_network, get_matchaspath1_network, get_matchaspath2_network, \
     get_matchaspath3_network, get_matchaspath4_network
+
+from utils.config_parser import load_network_from_configs
 
 
 class TestSuite(cmd.Cmd):
@@ -27,6 +30,11 @@ class TestSuite(cmd.Cmd):
     def do_exit(self, line=''):
         """exit: Leave the CLI"""
         return True
+
+    def do_parse(self, line=''):
+        if not os.path.exists(line):
+            print('The supplied path does not exist.')
+        self.network = load_network_from_configs(line)
 
     def do_load(self, line=''):
         """load: Load one of the provided network models or create a new one from configurations"""
