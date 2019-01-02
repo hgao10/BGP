@@ -9,28 +9,21 @@ from bitstring import BitArray
 from utils.logger import get_logger
 
 from greenery.lego import parse
-from greenery import fsm
 from greenery import lego
 from colorama import Fore
 from colorama import Style
 import sys
+import copy
 
 def eprint(*args, **kwargs):
     print(Fore.RED, *args, Style.RESET_ALL, file=sys.stderr, **kwargs)
 
-
 def debug(*args, **kwargs):
     print(Fore.YELLOW, *args, Style.RESET_ALL, file=sys.stderr, **kwargs)
-
-
-
-import copy
-
 
 class RouteMapType(Enum):
     PERMIT = 1
     DENY = 2
-
 
 class RouteAnnouncementFields(Enum):
     IP_PREFIX = 1
@@ -116,13 +109,8 @@ class RouteAnnouncement(object):
             self.as_path = AsPath(regex=None)
             self.logger.debug(" Initialize as path regex to %s" % self.as_path.as_path_regex)
 
-
-        self.as_path.check_fsm('constructor')
-
         self.hit = 0
         self.drop_next_announcement = 0
-
-        # self.logger = get_logger('RouteAnnouncement', 'DEBUG')
 
     def set_field(self, field, value):
         if field == RouteAnnouncementFields.IP_PREFIX:
@@ -604,23 +592,9 @@ class RouteAnnouncement(object):
         elif field == RouteAnnouncementFields.AS_PATH:
             # check if pattern is disjoint from the current as_path
             self.hit = 0
-            self.logger.debug("as path matching pattern is %s" % pattern)
             pattern_regex = parse(pattern)
-            self.logger.debug("as path ' 3 ' is contained in the pattern parse %s" % pattern_regex.matches(" 3 "))
 
             pattern_fsm = pattern_regex.to_fsm()
-            self.logger.debug("as path ' 3 ' is contained in the pattern fsm %s" % pattern_fsm.accepts(" 3 "))
-            self.logger.debug("self.as_path.as_path_regex is %s" % self.as_path.as_path_regex)
-            self.logger.debug("self.as_path.as_path_regex outdated is %s" % self.as_path.as_path_regex_outdated)
-
-            # self.as_path.as_path_regex = parse(".*")
-            # self.as_path.as_path_fsm = self.as_path.as_path_regex.to_fsm()
-            # self.logger.debug("self.as_path.as_path_fsm is the corresponding fsm to self.as_path.as_path_regex :%s" %
-            #                   self.as_path.as_path_fsm.equivalent(self.as_path.as_path_regex.to_fsm()))
-            self.as_path.check_fsm('announcement')
-
-            # self.logger.debug("as path regex DUMMY is to the regex %s" % (self.as_path.as_path_regex.equivalent(self.as_path.as_path_regex_dummy)))
-
             try:
                 regex = lego.from_fsm(self.as_path.as_path_fsm)
                 print("self.self.as_path.as_path_fsm converts to regex" % regex)
