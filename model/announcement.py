@@ -55,6 +55,7 @@ class RouteAnnouncement(object):
     def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, AS_community_list= None, debug=True):
         # TODO model all other fields
         self.logger = get_logger('RouteAnnouncement', 'DEBUG')
+
         if ip_prefix:
             self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix, RouteAnnouncementFields.IP_PREFIX)
             self.ip_prefix_deny = []
