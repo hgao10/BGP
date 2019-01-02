@@ -127,11 +127,9 @@ class NetworkTopology(nx.Graph):
                 # iterate over all neighbors and pass through respective export filter (if it exists)
                 # and skip the neighbor from which the announcement was received as it is not announced back
 
-                # TODO make sure that iBGP announcements are not sent over more than one hop
                 for neighbor_id in self.neighbors(curr_router_id):
-                    print('current neighbor id is', neighbor_id)
                     if neighbor_id == prev_router_id:
-                        print('Find in_neighbor in the return list, continue', neighbor_id)
+                        self.logger.debug("Don't send an announcement back to where it came from (%s)." % neighbor_id)
                         continue
                     else:
                         if (RouteMapDirection.OUT, neighbor_id) in curr_router.route_maps:
@@ -146,11 +144,14 @@ class NetworkTopology(nx.Graph):
                         if neighbor_id in self.peers:
                             external_routers[self.router_id_to_name[neighbor_id]].extend(export_announcements)
                             print('{} : {}'.format(self.router_id_to_name[neighbor_id], export_announcements))
-                        else:
+                        elif prev_router_id in self.peers:
+                            # make sure that only routes received over eBGP are sent to iBGP neighbors
                             for export_announcement in export_announcements:
                                 remaining_edges.append((curr_router_id, neighbor_id, export_announcement))
                                 print('remaining edges.append(curr_router_id, neighbor_id, export_announcement)',
                                       curr_router_id, neighbor_id, export_announcement)
+                        else:
+                            self.logger.debug("Don't send internal announcement to internal neighbor: %s." % neighbor_id)
 
         return external_routers
 
@@ -163,3 +164,6 @@ class NetworkTopology(nx.Graph):
         else:
             self.logger.error('Unknown router: %s.' % (identifier, ))
             sys.exit(0)
+
+    def get_external_routers(self):
+        return self.peers.keys()
