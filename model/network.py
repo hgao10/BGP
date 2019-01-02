@@ -163,3 +163,6 @@ class NetworkTopology(nx.Graph):
         else:
             self.logger.error('Unknown router: %s.' % (identifier, ))
             sys.exit(0)
+
+    def get_external_routers(self):
+        return self.peers.keys()
