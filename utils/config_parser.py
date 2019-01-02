@@ -16,7 +16,7 @@ from model.network import NetworkTopology
 from utils.logger import get_logger
 
 
-logger = get_logger('ConfigParser', 'DEBUG')
+logger = get_logger('ConfigParser', 'INFO')
 
 
 def load_network_from_configs(config_path, scenario_name=""):
@@ -43,6 +43,7 @@ def load_network_from_configs(config_path, scenario_name=""):
     routers = dict()
     route_maps = dict()
     peerings = dict()
+    communities = set()  # set of all communities that somehow appear in the configs
 
     network = NetworkTopology(scenario_name)
 
@@ -61,7 +62,10 @@ def load_network_from_configs(config_path, scenario_name=""):
         prefix_lists = create_prefix_lists(parsed_configs[config])
 
         # add all community-lists
-        community_lists = create_community_lists(parsed_configs[config])
+        community_lists, tmp_communities = create_community_lists(parsed_configs[config])
+
+        # update the communities
+        communities |= tmp_communities
 
         # add all access-lists
         access_lists = create_access_lists(parsed_configs[config])
@@ -70,7 +74,12 @@ def load_network_from_configs(config_path, scenario_name=""):
         as_path_lists = create_as_path_lists(parsed_configs[config])
 
         # add all route-maps
-        route_maps[router_name] = create_route_maps(parsed_configs[config], prefix_lists, community_lists, access_lists, as_path_lists)
+        route_maps[router_name], tmp_communities = create_route_maps(
+            parsed_configs[config], prefix_lists, community_lists, access_lists, as_path_lists
+        )
+
+        # update the communities
+        communities |= tmp_communities
 
         # get BGP peerings
         local_peerings, external_routers = get_bgp_peerings(parsed_configs[config])
@@ -93,8 +102,7 @@ def load_network_from_configs(config_path, scenario_name=""):
                 as_path_lists,
                 route_maps[router_name],
                 local_peerings,
-                external_routers
-
+                external_routers,
             )
         )
 
@@ -114,6 +122,12 @@ def load_network_from_configs(config_path, scenario_name=""):
                         direction,
                         neighbor
                     )
+
+    # add a list of all the communities to the network model
+    communities = list(communities)
+    communities.sort()
+    logger.debug("Community List: %s" % ", ".join(communities))
+    network.add_community_list(communities)
 
     return network
 
@@ -163,6 +177,7 @@ def create_prefix_lists(parsed_config):
 
 def create_community_lists(parsed_config):
     community_lists = defaultdict(list)
+    communities = set()
 
     cl_regex = "^ip\scommunity-list\s(standard\s)?(\w+)\s(deny|permit)\s(.*)$"
 
@@ -173,10 +188,11 @@ def create_community_lists(parsed_config):
         cl_type = get_match_type(cl_config.re_match(cl_regex, group=3))
         tmp_list = cl_config.re_match(cl_regex, group=4)
         cl_list = tmp_list.split()
+        communities.update(cl_list)
 
         community_lists[cl_name].append((cl_type, cl_list))
 
-    return community_lists
+    return community_lists, communities
 
 
 def create_access_lists(parsed_config):
@@ -215,6 +231,7 @@ def create_as_path_lists(parsed_config):
 
 def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists, as_path_lists):
     route_maps = dict()
+    communities = set()
 
     rm_configs = parsed_config.find_objects("^route-map\s(\w+)\s(permit|deny)\s(\d+)$", exactmatch=True)
     for rm_config in rm_configs:
@@ -230,11 +247,15 @@ def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists
         rm_items = RouteMapItems()
         for child in rm_config.children:
             if child.re_match("^\s*(match)"):
-                match_type, field, pattern, filter_type = parse_match(child, prefix_lists, community_lists, access_lists, as_path_lists)
+                match_type, field, pattern, filter_type = parse_match(
+                    child, prefix_lists, community_lists, access_lists, as_path_lists
+                )
                 rm_items.add_match(match_type, field, pattern, filter_type)
 
             elif child.re_match("^\s*(set)"):
-                field, pattern = parse_action(child)
+                field, pattern, tmp_communities = parse_action(child)
+                communities.union(tmp_communities)
+
                 rm_items.add_action(field, pattern)
 
             else:
@@ -243,11 +264,13 @@ def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists
         rm_seq_number = int(rm_config.re_match(rm_regex, group=3))
         route_maps[rm_name].add_item(rm_items, rm_seq_number)
 
-    return route_maps
+    return route_maps, communities
 
 
 def parse_match(config_line, prefix_lists, community_lists, access_lists, as_path_lists):
-    str_field = config_line.re_match("^\s*match\s(community|ip\saddress\sprefix-list|local-preference|metric|as-path)", group=1)
+    str_field = config_line.re_match(
+        "^\s*match\s(community|ip\saddress\sprefix-list|local-preference|metric|as-path)", group=1
+    )
 
     if str_field == "community":
         field = RouteAnnouncementFields.COMMUNITIES
@@ -329,6 +352,8 @@ def parse_match(config_line, prefix_lists, community_lists, access_lists, as_pat
 
 
 def parse_action(config_line):
+    communities = set()
+
     str_field = config_line.re_match(
         "^\s*set\s(community|ip\snext-hop|local-preference|as-path\sprepend|metric)",
         group=1
@@ -338,6 +363,7 @@ def parse_action(config_line):
         field = RouteAnnouncementFields.COMMUNITIES
         str_pattern = config_line.re_match("^\s*set\scommunity\s(.+)$", group=1)
         pattern = str_pattern.split()
+        communities = set(pattern)
 
     elif str_field == "ip next-hop":
         field = RouteAnnouncementFields.NEXT_HOP
@@ -361,7 +387,7 @@ def parse_action(config_line):
         logger.error("UNKNOWN ACTION: %s" % config_line.text)
         sys.exit(0)
 
-    return field, pattern
+    return field, pattern, communities
 
 
 def get_bgp_peerings(parsed_config):
@@ -457,7 +483,7 @@ def local_debug_output(
     if route_maps:
         output += "ROUTE MAPS:\n"
         for rm_name, data1 in route_maps.items():
-            output += "\tName: %s, RouteMap: %s\n" % (rm_name, data1)
+            output += "\tName: %s, RouteMap:\n%s\n" % (rm_name, data1)
 
     if local_peerings:
         output += "PEERINGS\n"

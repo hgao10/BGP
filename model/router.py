@@ -56,6 +56,13 @@ class RouteMap(object):
         self.type = rm_type  # permit or deny
         self.logger = get_logger('RouteMap', 'DEBUG')
 
+    def __str__(self):
+        output = ""
+        self.sequence.sort()
+        for seq in self.sequence:
+            output += "route-map %s %s %d\n%s\n" % (self.name, self.type, seq, self.items[seq])
+        return output
+
     def add_item(self, item, seq_number):
         self.sequence.append(seq_number)
         self.items[seq_number] = item
@@ -109,6 +116,12 @@ class RouteMapItems(object):
         self.matches = list()
         self.actions = list()
         self.logger = get_logger('RouteMapItems', 'DEBUG')
+
+    def __str__(self):
+        match_str = "\n\t".join([str(match) for match in self.matches])
+        action_str = "\n\t".join([str(action) for action in self.actions])
+        output = "\t%s\n\t%s" % (match_str, action_str)
+        return output
 
     def add_match(self, match_type, field, pattern, filter_type):
         self.logger.debug('adding a match with match_type %s | field: %s | pattern: %s| filter_type: %s' % (match_type, field, pattern, filter_type))
@@ -275,6 +288,10 @@ class RouteMapMatch(object):
 
         return processed_ann, to_be_processed_ann
 
+    def __str__(self):
+        output = "match %s %s (%s)" % (self.field, self.pattern, self.type)
+        return output
+
 
 class RouteMapAction(object):
     def __init__(self, field, pattern):
@@ -288,3 +305,7 @@ class RouteMapAction(object):
         print('Set field %s to pattern %s' % (self.field, self.pattern))
         announcement.set_field(self.field, self.pattern)
         return
+
+    def __str__(self):
+        output = "set %s %s" % (self.field, self.pattern)
+        return output
