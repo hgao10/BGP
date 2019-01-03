@@ -229,7 +229,8 @@ def create_as_path_lists(parsed_config):
 
 
 def map_pattern_to_regex(pattern):
-    regex = pattern.replace("_", ".*\W")
+    regex = pattern.replace("_", "\W")
+    regex = ".*%s.*" % regex
     return regex
 
 
