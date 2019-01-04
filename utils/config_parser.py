@@ -16,7 +16,7 @@ from model.network import NetworkTopology
 from utils.logger import get_logger
 
 
-logger = get_logger('ConfigParser', 'INFO')
+logger = get_logger('ConfigParser', 'DEBUG')
 
 
 def load_network_from_configs(config_path, scenario_name=""):
@@ -160,7 +160,7 @@ def create_prefix_lists(parsed_config):
 
         pl_name = pl_config.re_match(pl_regex, group=1)
         pl_seq = int(pl_config.re_match(pl_regex, group=2))
-        pl_type = pl_config.re_match(pl_regex, group=3)
+        pl_type = get_match_type(pl_config.re_match(pl_regex, group=3))
         pl_prefix = pl_config.re_match(pl_regex, group=4)
         pl_le = pl_config.re_match(pl_regex, group=5)
         pl_ge = pl_config.re_match(pl_regex, group=6)
