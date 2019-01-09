@@ -214,12 +214,12 @@ class TestSuite(cmd.Cmd):
             # tmp_stats = TimingStats(scenario, i, run_time)
             if self.itemtype == ItemType.MATCH:
                 with open(file_name, 'a') as outfile:
-                    outfile.write("%s %s %s\n" % (i,  run_time, rm_items.matches[0].pattern))
-                print( i, run_time, rm_items.matches[0].pattern,)
+                    outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.matches[0].pattern))
+                print(i, run_time, rm_items.matches[0].pattern)
             if self.itemtype == ItemType.SET:
                 with open(file_name, 'a') as outfile:
-                    outfile.write("%s %s %s\n" % (i,  run_time, rm_items.actions[0].pattern))
-                print(i, run_time,rm_items.actions[0].pattern)
+                    outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.actions[0].pattern))
+                print(i, run_time, rm_items.actions[0].pattern)
 
             # if i % 10 == 0:
             #     logger.info('Done with iteration %d out of %d' % (i + 1, repetitions))

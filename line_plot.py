@@ -37,6 +37,15 @@ if __name__ == '__main__':
                 first = False
                 tmp_scenario = data[0]
                 scenarios.append(tmp_scenario)
+                # FieldTest, IP_PREFIX, MATCH, PERMIT, LE, 100
+                # FieldTest, COMMUNITIES, SET,100
+                field = data[1]
+                item_type = data[2]
+                if item_type == "MATCH":
+                    routemaptype = data[3]
+                    run_rep = data[5]
+                else:
+                    run_rep = data[3]
                 continue
 
             # tmp_scenario = data[0]
@@ -68,4 +77,11 @@ if __name__ == '__main__':
     ax.legend(ps, ss, loc='lower right', ncol=1)
 
     plt.tight_layout(pad=0.0, w_pad=1.0, h_pad=0.0)
-    fig.savefig('bgp_timing_{:%Y%m%d-%H%M%S}.pdf'.format(datetime.datetime.now()), bbox_inches='tight')
+
+    if item_type == "MATCH":
+
+        fig.savefig('timing_%s_%s_%s_%s_%s.pdf' % (field, item_type, routemaptype, run_rep,'{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now() )),
+                                                   bbox_inches='tight')
+
+    else:
+        fig.savefig('timing_%s_%s_%s_%s.pdf' % (field, item_type, run_rep, '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now())), bbox_inches='tight')
