@@ -55,6 +55,7 @@ class RouteMap(object):
         self.items = dict()
         self.type = rm_type  # permit or deny
         self.logger = get_logger('RouteMap', 'DEBUG')
+        self.logger.disabled = True
 
     def __str__(self):
         output = ""
@@ -67,6 +68,10 @@ class RouteMap(object):
         self.sequence.append(seq_number)
         self.items[seq_number] = item
 
+    def clear(self):
+        self.items.clear()
+        self.sequence = list()
+
     def apply(self, announcement, route_map_direction):
         processed_announcements = list()
 
@@ -76,10 +81,16 @@ class RouteMap(object):
 
         announcement_list = list()
         announcement_list.append(announcement)
+
+        # if the route map is empty, let everything pass through
+        if len(self.sequence) == 0:
+            self.logger.debug("route map is empty, let everything pass through")
+            processed_announcements = [announcement]
         for i in self.sequence:
             route_map_item = self.items[i]
 
             list_to_be_processed_ann.clear()
+            self.logger.debug("len of announcement_list is %s" % len(announcement_list))
             for ann in announcement_list:
                 self.logger.debug('Going to apply item seq %s in route map %s | current announcement is %s' % (
                 i, self.name, ann))
@@ -87,7 +98,7 @@ class RouteMap(object):
                 #to_be_processed_ann is a list
                 if processed_ann.hit == 1:
                     processed_announcements.append(processed_ann)
-                    print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
+                    # print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
                 for to_be_ann in to_be_processed_ann:
                     list_to_be_processed_ann.append(to_be_ann)
                     self.logger.debug("append %s to list_to_be_processed" % to_be_ann)
@@ -101,7 +112,7 @@ class RouteMap(object):
                     self.logger.debug("announcement list is: %s" % (" ,".join(listA)))
 
             if processed_ann.drop_next_announcement == 1:
-                print("break from routemapapply ")
+                # print("break from routemapapply ")
                 break
 
         return processed_announcements
@@ -112,7 +123,7 @@ class RouteMapItems(object):
         self.matches = list()
         self.actions = list()
         self.logger = get_logger('RouteMapItems', 'DEBUG')
-
+        self.logger.disabled = True
     def __str__(self):
         match_str = "\n\t".join([str(match) for match in self.matches])
         action_str = "\n\t".join([str(action) for action in self.actions])
@@ -124,7 +135,7 @@ class RouteMapItems(object):
         tmp_rm_match = RouteMapMatch(match_type, field, pattern)
 
         if field == RouteAnnouncementFields.IP_PREFIX:
-            self.logger.debug('Entered field : %s == RouteAnnouncementFields.IP_PREFIX and filter_type: %s and %s!' % (field, filter_type, FilterType.LE))
+            self.logger.debug('Entered field : %s == RouteAnnouncementFields.IP_PREFIX and filter_type: %s ' % (field, filter_type))
 
             if filter_type == FilterType.EQUAL:
                 self.logger.debug('Entered filter_type == filtertype.equal if')
@@ -164,11 +175,11 @@ class RouteMapItems(object):
         self.actions.append(tmp_rm_action)
 
     def apply(self, announcement):
-        announcement.as_path.check_fsm("Before copy announcement")
+        # announcement.as_path.check_fsm("Before copy announcement")
         original_fsm = announcement.as_path.as_path_fsm
         tmp_announcement = copy.deepcopy(announcement)
         tmp_announcement.as_path.as_path_fsm = original_fsm
-        tmp_announcement.as_path.check_fsm("After copy tmp announcement")
+        # tmp_announcement.as_path.check_fsm("After copy tmp announcement")
 
         # Applying the matches
         self.logger.debug("Read to apply routemap item, match list length: %s" % len(self.matches))
@@ -211,7 +222,7 @@ class RouteMapItems(object):
             if match.field != RouteAnnouncementFields.AS_PATH:
                 # restore changes brought by deepcopy
                 item_next_announcement.as_path.as_path_fsm = original_fsm
-                item_next_announcement.as_path.check_fsm("After copy item next announcement")
+                # item_next_announcement.as_path.check_fsm("After copy item next announcement")
 
             item_next_announcements.append(item_next_announcement)
 
@@ -234,13 +245,10 @@ class RouteMapItems(object):
             else:
                 overall_hit = 1
 
-
-
         listA= list()
         for i in item_next_announcements:
             listA.append(str(i))
             self.logger.debug("item_next_announcement list: %s" % (" ,".join(listA)))
-
 
         # announcement.hit = overall_hit
         tmp_announcement.hit = overall_hit
@@ -255,9 +263,9 @@ class RouteMapItems(object):
 
         # announcement.drop_next_announcement = overall_drop
         tmp_announcement.drop_next_announcement = overall_drop
-        # Applying the actions
-        # TODO add actions
-        if overall_hit == 1:
+        # Applying the actions if all matches match or there is no match
+        if overall_hit == 1 or len(self.matches) == 0:
+            tmp_announcement.hit = 1
             for action in self.actions:
                 action.apply(tmp_announcement)
 
@@ -271,6 +279,7 @@ class RouteMapMatch(object):
         self.field = field
         self.pattern = pattern
         self.logger = get_logger('RouteMapMatch', 'DEBUG')
+        self.logger.disabled = True
         #self.filter_type = filter_type # equal, ge, le
 
     def apply(self, announcement):
@@ -298,7 +307,7 @@ class RouteMapAction(object):
         # TODO implement
         # should just be set, instead of filtering
         #current_announcement, next_announcement = announcement.filter(self.type, self.field, self.pattern, FilterType.EQUAL)
-        print('Set field %s to pattern %s' % (self.field, self.pattern))
+        # print('Set field %s to pattern %s' % (self.field, self.pattern))
         announcement.set_field(self.field, self.pattern)
         return
 

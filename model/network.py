@@ -16,6 +16,7 @@ class NetworkTopology(nx.Graph):
 
         # initialize logging
         self.logger = get_logger('NetworkTopology', 'DEBUG')
+        self.logger.disabled = True
 
         self.name = name
 
@@ -83,7 +84,7 @@ class NetworkTopology(nx.Graph):
 
         # announcement carries a list of all the available community values
         if as_community_list:
-            print("creating routeannouncement with as community list")
+            # print("creating routeannouncement with as community list")
             announcement = RouteAnnouncement(AS_community_list= as_community_list)
 
         else:
@@ -91,12 +92,11 @@ class NetworkTopology(nx.Graph):
 
         # map the neighbor to the router id, if the name was supplied
         neighbor_id = self.get_router_id(neighbor)
-        print('get in_neighbors ip, should be 9.0', neighbor_id)
 
         # find entry point from that neighbor
         # returns a list of internal border routers that are connected to the external neighbor (expect a total of one)
         ingress_routers = list(self.neighbors(neighbor_id))
-        print('returns the internal router that is directly connected to the neighbor, should just be 1, 10.0.0', ingress_routers)
+        # print('returns the internal router that is directly connected to the neighbor, should just be 1, 10.0.0', ingress_routers)
         ingress_router = ingress_routers[0]
 
         if len(ingress_routers) > 1:
@@ -108,18 +108,16 @@ class NetworkTopology(nx.Graph):
 
         # performing a DFS on the BGP topology graph, starting with the entry point
         while remaining_edges:
-            print('remaining edges: ', remaining_edges)
+            # print('remaining edges: ', remaining_edges)
             prev_router_id, curr_router_id, announcement = remaining_edges.pop()
             curr_router = self.routers[curr_router_id]  # .routers is a dict of internal BGP routers indexed by ip addr
 
             # pass announcement through import filter (if it exists)
             if (RouteMapDirection.IN, prev_router_id) in curr_router.route_maps:
                 in_map = curr_router.route_maps[(RouteMapDirection.IN, prev_router_id)]
-                print('before applying route_map_in, the announcement is', announcement)
-                announcement.as_path.check_fsm()
+                # print('before applying route_map_in, the announcement is', announcement)
                 local_announcements = in_map.apply(announcement, RouteMapDirection.IN)
-                announcement.as_path.check_fsm()
-                print('assigning route-mapping-in to local_announcement', local_announcements)
+                # print('assigning route-mapping-in to local_announcement', local_announcements)
             else:
                 local_announcements = [announcement]
 
@@ -134,22 +132,22 @@ class NetworkTopology(nx.Graph):
                     else:
                         if (RouteMapDirection.OUT, neighbor_id) in curr_router.route_maps:
                             out_map = curr_router.route_maps[(RouteMapDirection.OUT, neighbor_id)]
-                            print('going to apply OUT_MAP')
+                            # print('going to apply OUT_MAP')
                             export_announcements = out_map.apply(local_announcement, RouteMapDirection.OUT)
 
-                            print('OUT route map filtering', export_announcements)
+                            # print('OUT route map filtering', export_announcements)
                         else:
                             export_announcements = [local_announcement]
 
                         if neighbor_id in self.peers:
                             external_routers[self.router_id_to_name[neighbor_id]].extend(export_announcements)
-                            print('{} : {}'.format(self.router_id_to_name[neighbor_id], export_announcements))
+                            # print('{} : {}'.format(self.router_id_to_name[neighbor_id], export_announcements))
                         elif prev_router_id in self.peers:
                             # make sure that only routes received over eBGP are sent to iBGP neighbors
                             for export_announcement in export_announcements:
                                 remaining_edges.append((curr_router_id, neighbor_id, export_announcement))
-                                print('remaining edges.append(curr_router_id, neighbor_id, export_announcement)',
-                                      curr_router_id, neighbor_id, export_announcement)
+                                # print('remaining edges.append(curr_router_id, neighbor_id, export_announcement)',
+                                #       curr_router_id, neighbor_id, export_announcement)
                         else:
                             self.logger.debug("Don't send internal announcement to internal neighbor: %s." % neighbor_id)
 

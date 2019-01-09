@@ -48,6 +48,7 @@ class RouteAnnouncement(object):
     def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, AS_community_list= None, debug=True):
         # TODO model all other fields
         self.logger = get_logger('RouteAnnouncement', 'DEBUG')
+        self.logger.disabled = True
 
         if ip_prefix:
             self.ip_prefix = SymbolicField.create_from_prefix(ip_prefix, RouteAnnouncementFields.IP_PREFIX)
@@ -56,7 +57,6 @@ class RouteAnnouncement(object):
         else:
             self.ip_prefix = SymbolicField(RouteAnnouncementFields.IP_PREFIX, 32)
             self.ip_prefix_deny = []
-            print('fully symbolicfield for ip_prefix', self.ip_prefix)
 
         if next_hop:
             self.next_hop = SymbolicField.create_from_prefix(next_hop, RouteAnnouncementFields.NEXT_HOP)
@@ -65,7 +65,6 @@ class RouteAnnouncement(object):
         else:
             self.next_hop = SymbolicField(RouteAnnouncementFields.NEXT_HOP, 32)
             self.next_hop_deny = []
-            print('fully symbolicfield for next_hop', self.next_hop)
 
         if local_pref:
             self.local_pref = local_pref
@@ -386,12 +385,11 @@ class RouteAnnouncement(object):
     # match type could be eq, ge, le
     def filter(self, match_type, field, pattern):
         # TODO
-        self.as_path.check_fsm('filter')
+        # self.as_path.check_fsm('filter')
         original_fsm = self.as_path.as_path_fsm
         next = copy.deepcopy(self)
         next.as_path.as_path_fsm = original_fsm
-        next.as_path.check_fsm('filter deep copy next')
-        print("Done deep copy")
+        # next.as_path.check_fsm('filter deep copy next')
 
         # assume pattern can only be GE, LE or EQUAL. Currently not considering GE and LE at the match
         if field == RouteAnnouncementFields.IP_PREFIX:
@@ -596,11 +594,12 @@ class RouteAnnouncement(object):
             pattern_regex = parse(pattern)
 
             pattern_fsm = pattern_regex.to_fsm()
-            try:
-                regex = lego.from_fsm(self.as_path.as_path_fsm)
-                print("self.self.as_path.as_path_fsm converts to regex" % regex)
-            except Exception:
-                print ("unable to produce a regex from current self.as_path.as_path_fsm")
+            # comment it out for performance testing purpose
+            # try:
+            #     regex = lego.from_fsm(self.as_path.as_path_fsm)
+            #     print("self.self.as_path.as_path_fsm converts to regex" % regex)
+            # except Exception:
+            #     print ("unable to produce a regex from current self.as_path.as_path_fsm")
             self.logger.debug("as path ' 3 4 ' is contained in the self as path fsm %s" % self.as_path.as_path_fsm.accepts(" 3 4 "))
 
             if pattern_fsm.isdisjoint(self.as_path.as_path_fsm):
@@ -625,7 +624,7 @@ class RouteAnnouncement(object):
                     # deny statement and doesn't care what updating self.as_path as it won't be appended to processed packet
                     self.hit = 0
 
-                next.as_path.check_fsm('next announcement')
+                # next.as_path.check_fsm('next announcement')
                 next.as_path.as_path_fsm = self.as_path.as_path_fsm.difference(pattern_fsm)
 
                 next.as_path.update_regex()
@@ -647,8 +646,8 @@ class AsPath(object):
             self.as_path_regex = parse(".*")
 
         self.as_path_fsm = self.as_path_regex.to_fsm()
-        print ("initialize as path fsm from regex %s" % self.as_path_regex)
-        print ("initialized as path fsm accepts ' 3 4' %s" % self.as_path_fsm.accepts(" 3 4 "))
+        # print ("initialize as path fsm from regex %s" % self.as_path_regex)
+        # print ("initialized as path fsm accepts ' 3 4' %s" % self.as_path_fsm.accepts(" 3 4 "))
 
         self. as_path_regex_outdated = False
 
@@ -734,7 +733,7 @@ class SymbolicField(object):
         # TODO add support for the most important operations (e.g., bitwise-and)
 
         self.logger = get_logger('SymbolicField', 'DEBUG')
-
+        self.logger.disabled = True
         self.field_type = field_type
         #self.original_length = length
         # initialize BitArray to all 1s
@@ -821,6 +820,7 @@ class SymbolicField(object):
     @staticmethod
     def create_from_prefix(str_ip_prefix, type):
         logger = get_logger('SymbolicField_create_from_prefix', 'DEBUG')
+        logger.disabled = True
         ip_prefix = IPNetwork(str_ip_prefix)
         logger.debug('create from prefix: ip prefix object is - %s and prefix length - %s' % (ip_prefix, ip_prefix.prefixlen))
 
@@ -852,8 +852,8 @@ class SymbolicField(object):
 
         symbolic_field.prefixlen = ip_prefix.prefixlen
         symbolic_field.str_ip_prefix = str_ip_prefix
-        print('symbolic_field.bitarray is %s and bitarray_mask length is %s' % (symbolic_field.bitarray,
-                                                                                       symbolic_field.prefixlen))
+        # print('symbolic_field.bitarray is %s and bitarray_mask length is %s' % (symbolic_field.bitarray,
+        #                                                                                symbolic_field.prefixlen))
         return symbolic_field
 
 
