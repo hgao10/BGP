@@ -14,7 +14,6 @@ from model.test_networks import get_simple_network, get_double_network, get_test
 
 from utils.config_parser import load_network_from_configs
 
-
 class TestSuite(cmd.Cmd):
 
     def __init__(self, *args, **kw):
@@ -127,29 +126,34 @@ class TestSuite(cmd.Cmd):
             for neighbor, announcement in outcome.items():
 
                 output += '\t%s: %s\n' % (neighbor, announcement)
-                for announcement_element in announcement:
-                    print('announcement %d is %s' % (announcement.index(announcement_element), announcement))
 
-                    # Ask user for as path test strings until one is accepted by the fsm
-                    result = False
-                    i = 0
-                    while result is False:
-                        if i == 0:
-                            i = 1
-                        else:
-                            print("test as path %s is not accepted, please input new as path\n" % test_as_path)
-                        test_as_path = input("Input as path to test the FSM for the as path\n")
-                        result = announcement_element.as_path.as_path_fsm.accepts(test_as_path)
-                    print("test as path %s is accepted" % test_as_path)
-
+                # Disable as path testing during time measurement
+                # self.test_as_path(announcement)
             print(output)
         else:
             print('You need to load a network model before you can run the symbolic execution.')
+
+    def test_as_path(self, announcement):
+        for announcement_element in announcement:
+            print('announcement %d is %s' % (announcement.index(announcement_element), announcement))
+
+            # Ask user for as path test strings until one is accepted by the fsm
+            result = False
+            i = 0
+            while result is False:
+                if i == 0:
+                    i = 1
+                else:
+                    print("test as path %s is not accepted, please input new as path\n" % test_as_path)
+                test_as_path = input("Input as path to test the FSM for the as path\n")
+                result = announcement_element.as_path.as_path_fsm.accepts(test_as_path)
+            print("test as path %s is accepted" % test_as_path)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--debug', help='enable debug output', action='store_true')
+
     args = parser.parse_args()
 
     debug = args.debug
