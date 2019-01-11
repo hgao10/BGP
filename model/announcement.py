@@ -589,16 +589,29 @@ class RouteAnnouncement(object):
             if zero == 1:
                 # match miss
                 self.hit = 0
+            # else:
+            #     # if self.communities.check_community_superset(pattern) == 1:
+            #     #     # pattern is equal to or a superset of current community
+            #     #     self.drop_next_announcement = 1
+            #     #     if match_type == RouteMapType.PERMIT:
+            #     #         self.hit = 1
+            #     #     else:
+            #     #         # deny because pattern is a superset or equal ot
+            #     #         self.hit = 0
+            #     #         # update current list
+            #     # # pattern list is a subset of current pattern, check if its in the deny list
+            elif match_type == RouteMapType.PERMIT:
+                self.hit = 1
+                self.communities.community_bitarray = BitArray(hex=str(community_match))
             else:
-                if match_type == RouteMapType.PERMIT:
-                    self.hit = 1
-                    self.communities.community_bitarray = BitArray(hex=str(community_match))
-                else:
-                    # it is a match, but its deny
+                # it is a symbolic link at the beginning
+                if self.communities.community_bitarray == BitArray('int:32=-1') and len(self.communities_deny) == 0:
                     self.hit = 1
                     self.communities_deny.append(pattern) # deny list is [16:1, 16:2]
                     self.logger.debug("Deny community pattern: %s and self.hit is %s" % (pattern, self.hit))
-                next.communities_deny.append(pattern)
+                else:
+                    self.hit = 0
+            next.communities_deny.append(pattern)
 
         elif field == RouteAnnouncementFields.AS_PATH:
             # check if pattern is disjoint from the current as_path
@@ -733,6 +746,22 @@ class Community(object):
 
         self.community_bitarray.set(True, set_item_index_true)
         self.community_bitarray.set(False, set_item_index_false)
+
+    def check_community_superset(self, pattern_list): # check if pattern is superset of self community
+        self_community_list = self.hsa_convert_to_list(self.community_bitarray)
+        if set(self_community_list).issubset(pattern_list):
+            return 1
+        else:
+            return 0
+
+    def hsa_convert_to_list(self):
+        contained_communities = list()
+        for i in range(16):
+            if (self.community_bitarray[i * 2] is True) and (self.community_bitarray[i * 2 + 1] is False):
+                contained_communities.append(self.AS_community_list[i])
+        return contained_communities
+
+
 
     def __str__(self):
         contained_communities = list()
