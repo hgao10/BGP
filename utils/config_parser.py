@@ -249,7 +249,7 @@ def create_route_maps(parsed_config, prefix_lists, community_lists, access_lists
         if rm_name not in route_maps:
             route_maps[rm_name] = RouteMap(rm_name, rm_type)
 
-        rm_items = RouteMapItems()
+        rm_items = RouteMapItems(rm_type)
         for child in rm_config.children:
             if child.re_match("^\s*(match)"):
                 match_type, field, pattern, filter_type = parse_match(
