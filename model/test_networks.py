@@ -133,7 +133,7 @@ def get_test_next_hop_network():
     rm_items = RouteMapItems()
 
     pattern = SymbolicField.create_from_prefix('39.127.1.0/24', RouteAnnouncementFields.IP_PREFIX)
-    rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.NEXT_HOP, pattern, FilterType.EQUAL)
+    rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.NEXT_HOP, pattern, FilterType.GE)
 
     tmp_in_route_map.add_item(rm_items, 10)
 

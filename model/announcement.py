@@ -524,6 +524,7 @@ class RouteAnnouncement(object):
                             self.equal_two_symbolic_ip(self.next_hop, overlap)
                         else:
                             # deny case
+                            self.hit = 1
                             self.next_hop_deny.append(overlap)
 
                         next.next_hop_deny.append(overlap)
