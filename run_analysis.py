@@ -6,13 +6,14 @@ import cmd
 import os
 import random
 
-from model.test_networks import get_simple_network, get_double_network, get_test1_network, get_test2_network, \
+from model.test_networks import get_simple_network, get_double_network, get_test0_network, get_test1_network, get_test2_network, \
     get_test3_network, get_test4_network, get_test5_network, get_test6_network, get_test7_network, get_test8_network, \
     get_test9_network, get_nexthop1_network, get_nexthop2_network, get_set_nexthop_network, get_set_3_fields_network, \
     get_matchmed_network, get_matchapply_network, get_matchcommunity_network, get_matchaspath1_network, get_matchaspath2_network, \
-    get_matchaspath3_network, get_matchaspath4_network
+    get_matchaspath3_network, get_matchaspath4_network, get_test_communities_network, get_test_next_hop_network, get_test_med_network
 
 from utils.config_parser import load_network_from_configs
+
 
 class TestSuite(cmd.Cmd):
 
@@ -47,6 +48,14 @@ class TestSuite(cmd.Cmd):
             self.network = get_simple_network()
         elif line == 'double':
             self.network = get_double_network()
+        elif line == 'testmed':
+            self.network = get_test_med_network()
+        elif line == 'testcom':
+            self.network = get_test_communities_network()
+        elif line == 'testnh':
+            self.network = get_test_next_hop_network()
+        elif line == 'test0':
+            self.network = get_test0_network()
         elif line == 'test1':
             self.network = get_test1_network()
         elif line == 'test2':
