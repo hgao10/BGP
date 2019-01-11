@@ -119,6 +119,7 @@ class TestSuite(cmd.Cmd):
                 self.neighbor = random.choice(list(self.network.get_external_routers()))
                 print("No neighbor specified, picked %s randomly." % self.neighbor)
 
+
             print("Propagate announcement with AS community list :%s" % self.network.AS_community_list)
             outcome = self.network.propagate_announcement(self.neighbor, None, self.network.AS_community_list)
 

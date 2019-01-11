@@ -426,7 +426,7 @@ class RouteAnnouncement(object):
                                 self.logger.debug("self ip_prefix %s" % self.ip_prefix)
                             else:
                                 # match_type == denys
-                                self.hit = 0
+                                self.hit = 1
                                 self.ip_prefix_deny.append(ip_prefix_intersect)
                                 self.logger.debug("Next announcement would deny ip_prefix %s" % ip_prefix_intersect)
 
@@ -446,6 +446,7 @@ class RouteAnnouncement(object):
                                 self.equal_two_symbolic_ip(self.ip_prefix, overlap)
                             # else for deny no need to set ip_hit just add to the deny list
                             else:
+                                self.hit = 1 # deny
                                 self.ip_prefix_deny.append(overlap)
                             next.ip_prefix_deny.append(overlap)
 
@@ -461,13 +462,17 @@ class RouteAnnouncement(object):
                             self.equal_two_symbolic_ip(self.ip_prefix, overlap)
                             self.logger.debug("self.ip_prefix %s should have the same prefix mask as overlap %s" % (self.ip_prefix.prefix_mask, overlap.prefix_mask) )
                         else:
+                            # set hit to 1 if we want to append it to the output, as long as if its not exactly the same
                             # deny case
+                            self.hit = 1
                             self.ip_prefix_deny.append(overlap)
 
                         next.ip_prefix_deny.append(overlap)
 
                 elif pattern.prefix_type == FilterType.EQUAL:
                     self.logger.debug("Entering EQUAL filtering")
+                    # check below may not be necessary since ip prefix mask overlap check is passed at the beginning
+                    # could combine equal and GE
                     if self.ip_prefix.prefix_mask[0] <= pattern.prefix_mask[0] <= self.ip_prefix.prefix_mask[1]:
                         overlap = self.check_ge_le_overlap(self.ip_prefix, pattern, limit)
                         if overlap == -1:
@@ -477,6 +482,7 @@ class RouteAnnouncement(object):
                                 self.hit = 1
                                 self.equal_two_symbolic_ip(self.ip_prefix, overlap)
                             else:
+                                self.hit = 1
                                 self.ip_prefix_deny.append(overlap)
 
                             next.ip_prefix_deny.append(overlap)
@@ -541,6 +547,7 @@ class RouteAnnouncement(object):
                         self.logger.debug("next.med :%s | self.med %s " % (next.med, self.med))
                     else:
                         # deny case
+                        self.hit = 1
                         self.med_deny.append(pattern)
                     next.med_deny.append(pattern)
 
@@ -550,6 +557,7 @@ class RouteAnnouncement(object):
                     self.hit = 1
                 else:
                     # deny case
+                    self.hit = 1
                     self.med_deny.append(pattern)
 
                 self.logger.debug("next.med :%s | self.med %s " % (next.med, self.med))
@@ -561,6 +569,7 @@ class RouteAnnouncement(object):
                     self.hit = 1
                 else:
                     # deny case
+                    self.hit = 1
                     self.med_deny.append(pattern)
 
                 self.logger.debug("next.med :%s | self.med %s " % (next.med, self.med))
@@ -584,6 +593,7 @@ class RouteAnnouncement(object):
                     self.communities.community_bitarray = BitArray(hex=str(community_match))
                 else:
                     # it is a match, but its deny
+                    self.hit = 1
                     self.communities_deny.append(pattern) # deny list is [16:1, 16:2]
                     self.logger.debug("Deny community pattern: %s and self.hit is %s" % (pattern, self.hit))
                 next.communities_deny.append(pattern)
@@ -610,24 +620,29 @@ class RouteAnnouncement(object):
                 if pattern_fsm.issuperset(self.as_path.as_path_fsm) is True:
                     self.logger.debug("current pattern is a superset of current as path fsm")
                     self.drop_next_announcement = 1
-
-                if match_type == RouteMapType.PERMIT:
-                    self.hit = 1
-
-                    if self.as_path.as_path_fsm.issuperset(pattern_fsm):
-                        self.logger.debug("current as path is a supperset of matching pattern")
-
-                    self.as_path.as_path_fsm = intersect_fsm
-                    self.as_path.update_regex()
-
+                    if match_type == RouteMapType.PERMIT:
+                        self.hit = 1
+                    else:
+                        self.hit = 0
                 else:
-                    # deny statement and doesn't care what updating self.as_path as it won't be appended to processed packet
-                    self.hit = 0
+                    if match_type == RouteMapType.PERMIT:
+                        self.hit = 1
+                        if self.as_path.as_path_fsm.issuperset(pattern_fsm):
+                            self.logger.debug("current as path is a supperset of matching pattern")
 
-                # next.as_path.check_fsm('next announcement')
-                next.as_path.as_path_fsm = self.as_path.as_path_fsm.difference(pattern_fsm)
+                        self.as_path.as_path_fsm = intersect_fsm
+                        self.as_path.update_regex()
 
-                next.as_path.update_regex()
+                    else:
+                        # deny case, update as path fsm to be the difference of patter
+                        self.hit = 1
+                        # should be the same as setting self.as_path.as_path_fsm.difference(intersect_fsm)
+                        self.as_path.as_path_fsm = self.as_path.as_path_fsm.difference(pattern_fsm)
+                        self.as_path.update_regex()
+                    # next.as_path.check_fsm('next announcement')
+                    next.as_path.as_path_fsm = self.as_path.as_path_fsm.difference(pattern_fsm)
+
+                    next.as_path.update_regex()
                 self.logger.debug("self.drop_next_announcement %s" % self.drop_next_announcement)
 
         else:
