@@ -384,7 +384,7 @@ class RouteAnnouncement(object):
 
     # match type could be eq, ge, le
     def filter(self, match_type, field, pattern):
-        # TODO
+
         # self.as_path.check_fsm('filter')
         original_fsm = self.as_path.as_path_fsm
         next = copy.deepcopy(self)
@@ -534,35 +534,36 @@ class RouteAnnouncement(object):
             pass
 
         elif field == RouteAnnouncementFields.MED:
-            # fully symbolic route at the beginning
-            if self.med == 'x' and len(self.med_deny) > 0:
-                deny = 0
+            deny = 0
+            if len(self.med_deny) > 0:
                 for x in self.med_deny:
                     if pattern == x:
                         deny = 1
                         break
-                if deny == 0:
+            if deny == 0 : # also includes the case where len(self.med_deny) == 0
+                if self.med == pattern:
                     if match_type == RouteMapType.PERMIT:
                         self.med = pattern
                         self.hit = 1
                         self.logger.debug("next.med :%s | self.med %s " % (next.med, self.med))
                     else:
                         # deny case
-                        self.hit = 1
+                        print("Deny hit")
+                        self.hit = 0
                         self.med_deny.append(pattern)
                     next.med_deny.append(pattern)
 
-            if self.med == pattern :
-                if match_type == RouteMapType.PERMIT:
-                    self.med = pattern
-                    self.hit = 1
-                else:
-                    # deny case
-                    self.hit = 1
-                    self.med_deny.append(pattern)
-
-                self.logger.debug("next.med :%s | self.med %s " % (next.med, self.med))
-                # next.med_deny.append(pattern)
+            # if self.med == pattern :
+            #     if match_type == RouteMapType.PERMIT:
+            #         self.med = pattern
+            #         self.hit = 1
+            #     else:
+            #         # deny case
+            #         self.hit = 1
+            #         self.med_deny.append(pattern)
+            #
+            #     self.logger.debug("next.med :%s | self.med %s " % (next.med, self.med))
+            #     # next.med_deny.append(pattern)
 
             if self.med == 'x' and self.med_deny == []:  # a specific med or fully symbolic route
                 if match_type == RouteMapType.PERMIT:
