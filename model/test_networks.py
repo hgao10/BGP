@@ -172,13 +172,13 @@ def get_test_communities_network():
     rm_items = RouteMapItems()
 
     community_pattern = ["16:1"]
-    rm_items.add_match(RouteMapType.PERMIT, RouteAnnouncementFields.COMMUNITIES, community_pattern, FilterType.GE)
+    rm_items.add_match(RouteMapType.DENY, RouteAnnouncementFields.COMMUNITIES, community_pattern, FilterType.GE)
 
     tmp_in_route_map.add_item(rm_items, 10)
 
     tmp_router.add_route_map(tmp_in_route_map, RouteMapDirection.IN, '9.0.0.1')
 
-    # add an export route-map
+    # # add an export route-map
     tmp_out_route_map = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
     rm_items = RouteMapItems()
 

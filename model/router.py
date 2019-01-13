@@ -4,7 +4,7 @@
 from enum import Enum
 from utils.logger import get_logger
 
-from model.announcement import FilterType, RouteAnnouncementFields, RouteAnnouncement
+from model.announcement import FilterType, RouteAnnouncementFields, RouteMapType, RouteAnnouncement
 import copy
 
 
@@ -95,8 +95,8 @@ class RouteMap(object):
                 self.logger.debug('Going to apply item seq %s in route map %s | current announcement is %s' % (
                 i, self.name, ann))
                 processed_ann, to_be_processed_ann = route_map_item.apply(ann)
-                #to_be_processed_ann is a list
-                if processed_ann.hit == 1:
+                # to_be_processed_ann is a list
+                if processed_ann.hit == 1 and route_map_item.type == RouteMapType.PERMIT:
                     processed_announcements.append(processed_ann)
                     # print('Routemap item %s applied, appending processed ann %s' % (i, processed_ann))
                 for to_be_ann in to_be_processed_ann:
@@ -160,7 +160,7 @@ class RouteMapItems(object):
                               'type is %s' % (field, filter_type, match_type))
 
             if filter_type != FilterType.GE:
-
+                print("NEXT_HOP matches are restricted to longest prefix match, filter type should be GE")
                 self.logger.error("NEXT_HOP matches are restricted to longest prefix match, filter type should be GE")
             else:
                 pattern.prefix_mask = [pattern.prefixlen, 32]
@@ -189,7 +189,10 @@ class RouteMapItems(object):
         item_next_announcements = list()
 
         for match in self.matches:
-
+            # don't want to directly apply the original announcement as we need to revert back to it if over match is zero
+            # TODO for future improvement: assign the returned value to tmp_ann each time, instead of tmp_announcement, this way no need to make
+            # copies after each match, just append tmp_ann to item_next_announcement! Should greatly simply the code
+            #
             tmp_announcement, next_announcement = match.apply(tmp_announcement)
 
             self.logger.debug("after apply match on field %s, tmp_announcement: %s| next_announcement: %s" % (match.field, tmp_announcement, next_announcement))
@@ -274,7 +277,6 @@ class RouteMapItems(object):
 
 class RouteMapMatch(object):
     def __init__(self, match_type, field, pattern):
-        # TODO better model what the match actually does. For example, we need to distinguish between exact, greater or equal and less or equal prefix matches
         self.type = match_type  # permit or deny
         self.field = field
         self.pattern = pattern
@@ -283,12 +285,10 @@ class RouteMapMatch(object):
         #self.filter_type = filter_type # equal, ge, le
 
     def apply(self, announcement):
-        # TODO add support for both deny and permit (e.g., for prefix-list, community-list etc)
 
         # self.logger.debug('Going to filter pattern: %s|pattern bitarray: %s| field: %s| match_type: %s' % (self.pattern, self.pattern.bitarray, self.field, self.type))
         processed_ann, to_be_processed_ann = announcement.filter(self.type, self.field, self.pattern)
 
-        # TODO update the exclude field
         self.logger.debug('Has filtered pattern: %s' % self.pattern)
 
         return processed_ann, to_be_processed_ann
@@ -304,7 +304,6 @@ class RouteMapAction(object):
         self.pattern = pattern
 
     def apply(self, announcement):
-        # TODO implement
         # should just be set, instead of filtering
         #current_announcement, next_announcement = announcement.filter(self.type, self.field, self.pattern, FilterType.EQUAL)
         # print('Set field %s to pattern %s' % (self.field, self.pattern))

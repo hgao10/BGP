@@ -46,7 +46,6 @@ class RouteAnnouncement(object):
     """
 
     def __init__(self, ip_prefix=None, next_hop=None, as_path=None, med=None, local_pref=None, communities=None, AS_community_list= None, debug=True):
-        # TODO model all other fields
         self.logger = get_logger('RouteAnnouncement', 'DEBUG')
         self.logger.disabled = True
 
@@ -130,7 +129,6 @@ class RouteAnnouncement(object):
             self.logger.error('Tried to set unknown field "%s with value "%s"' % (field, value))
 
     def set_ip_prefix(self, ip_prefix):
-        # TODO
         pass
 
     def set_next_hop(self, next_hop):
@@ -156,7 +154,6 @@ class RouteAnnouncement(object):
         pass
 
     def __str__(self):
-        # TODO add the other fields
         mask_ip_list = list()
         mask_ip_list_str = "[]"
 
@@ -412,6 +409,7 @@ class RouteAnnouncement(object):
                         self.hit = 1
                     else:
                         self.hit = 0
+
                         # everything is denied
                 elif pattern.prefix_type == FilterType.LE:
                     self.logger.debug("Entering LE filtering")
@@ -775,8 +773,6 @@ class Community(object):
 class SymbolicField(object):
     def __init__(self, field_type, length):
         # TODO efficiently detect if there is an impossible bit in the bitarray
-        # TODO add support for all other fields
-        # TODO add support for the most important operations (e.g., bitwise-and)
 
         self.logger = get_logger('SymbolicField', 'DEBUG')
         self.logger.disabled = True
@@ -831,30 +827,7 @@ class SymbolicField(object):
         else:
             return str(self.bitarray)
 
-    @ staticmethod
-    def convert_to_hsa(str_ip_prefix, prefix_mask):
-        ip_prefix = IPNetwork(str_ip_prefix)
-        bin_ip_prefix = ip_prefix.ip.bin[2:]
-        bitarray = BitArray('int:%d=-1' % (2 * 32,))
-        if len(bin_ip_prefix) < 32:
-            bin_ip_prefix = '0' * (32-len(bin_ip_prefix)) + bin_ip_prefix
 
-        # create a new bitstring by translating bits to the four bit representation
-        formatted_ip_prefix_bin = '0b'
-        for i in range(0, 32):
-            if prefix_mask[0] <= i <= (prefix_mask[1] - 1):
-                # fill the prefix mask[x,y] with wildcard bits
-                formatted_ip_prefix_bin += '11'
-            else:
-                if bin_ip_prefix[i] == '1':
-                    formatted_ip_prefix_bin += '10'
-                else:
-                    formatted_ip_prefix_bin += '01'
-
-        if type == RouteAnnouncementFields.IP_PREFIX:
-            bitarray &= BitArray(formatted_ip_prefix_bin)
-
-        return bitarray
 
     def ip_str_of_smaller_prefix_len(self, ip2):
         self.logger.debug("comparing two prefixes, prefix_mask 1: %s and prefix_mask2: %s and ip2.str_ip_prefix is %s" % (self.prefix_mask, ip2.prefix_mask, ip2.str_ip_prefix))
