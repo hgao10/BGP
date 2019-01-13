@@ -61,7 +61,7 @@ class RouteMap(object):
         output = ""
         self.sequence.sort()
         for seq in self.sequence:
-            output += "route-map %s %s %d\n%s\n" % (self.name, self.type, seq, self.items[seq])
+            output += "route-map %s %s %d\n%s\n" % (self.name, self.items[seq].type, seq, self.items[seq])
         return output
 
     def add_item(self, item, seq_number):
@@ -119,11 +119,14 @@ class RouteMap(object):
 
 
 class RouteMapItems(object):
-    def __init__(self):
+    def __init__(self, type):
         self.matches = list()
         self.actions = list()
+        self.type = type
+
         self.logger = get_logger('RouteMapItems', 'DEBUG')
         self.logger.disabled = True
+
     def __str__(self):
         match_str = "\n\t".join([str(match) for match in self.matches])
         action_str = "\n\t".join([str(action) for action in self.actions])
