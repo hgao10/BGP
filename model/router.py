@@ -162,13 +162,15 @@ class RouteMapItems(object):
             self.logger.debug('Entered field : %s == RouteAnnouncementFields.NEXT_HOP and filter_type: %s and match '
                               'type is %s' % (field, filter_type, match_type))
 
-            if filter_type != FilterType.GE:
-                print("NEXT_HOP matches are restricted to longest prefix match, filter type should be GE")
-                self.logger.error("NEXT_HOP matches are restricted to longest prefix match, filter type should be GE")
-            else:
-                pattern.prefix_mask = [pattern.prefixlen, 32]
-                pattern.prefix_type = FilterType.GE
-                self.logger.debug("Add next hop match, pattern is %s and prefix mask is %s" % (pattern, pattern.prefix_mask))
+            # if filter_type != FilterType.GE:
+            #     print("NEXT_HOP matches are restricted to longest prefix match, filter type should be GE")
+            #     self.logger.error("NEXT_HOP matches are restricted to longest prefix match, filter type should be GE")
+            # else:
+            # Correct user input
+            filter_type = FilterType.GE
+            pattern.prefix_mask = [pattern.prefixlen, 32]
+            pattern.prefix_type = FilterType.GE
+            self.logger.debug("Add next hop match, pattern is %s and prefix mask is %s" % (pattern, pattern.prefix_mask))
 
         self.matches.append(tmp_rm_match)
 
@@ -271,6 +273,7 @@ class RouteMapItems(object):
         tmp_announcement.drop_next_announcement = overall_drop
         # Applying the actions if all matches match or there is no match
         if overall_hit == 1 or len(self.matches) == 0:
+
             tmp_announcement.hit = 1
             for action in self.actions:
                 action.apply(tmp_announcement)

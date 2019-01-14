@@ -27,6 +27,7 @@ class Scenario(Enum):
     FieldTest = 1
     ItemSizeTest = 2
     RoutemapSizeTest = 3
+    NetworkSizeTest = 4
 
 
 # initialize logging
@@ -66,6 +67,9 @@ class TestSuite(cmd.Cmd):
         self.filtertype = None
         self.routemaptype = None
         self.itemtype = None
+        self.itemsize = 1
+        self.routemapnum = 1
+        self.itemnumber =1 # number of items in a route map
 
         self.prompt = '> '
         # self.intro = 'Hi, '
@@ -75,20 +79,40 @@ class TestSuite(cmd.Cmd):
     def do_load(self, line=''):
         scn_tag = line.split()
         self.scenario = Scenario[scn_tag[0]]
-        self.fieldtype = RouteAnnouncementFields[scn_tag[1]] # tag: IP_Prefix,
+        if self.scenario == Scenario.FieldTest:
+            self.fieldtype = RouteAnnouncementFields[scn_tag[1]] # tag: IP_Prefix,
 
-        self.repetitions = int(scn_tag[2])
+            self.repetitions = int(scn_tag[2])
 
-        self.itemtype = ItemType[scn_tag[3]] # match or set
-        if self.itemtype == ItemType.MATCH:
-            self.filtertype = FilterType[scn_tag[4]]  # ge, le or equal
-            self.routemaptype = RouteMapType[scn_tag[5]]  # deny or permit
+            self.itemtype = ItemType[scn_tag[3]] # match or set
+            if self.itemtype == ItemType.MATCH:
+                self.filtertype = FilterType[scn_tag[4]]  # ge, le or equal
+                self.routemaptype = RouteMapType[scn_tag[5]]  # deny or permit
+
+            print('scenario: %s, fieldtype :%s, repetitons:%s, filtertype: %s, routemaptype: %s, itemtype: %s' % (self.scenario, self.fieldtype,
+                                                                                                                  self.repetitions, self.filtertype,
+                                                                                                                  self.routemaptype, self.itemtype))
+
+        if self.scenario == Scenario.ItemSizeTest:
+            self.itemsize = int(scn_tag[1]) # tag: how many match or set operations are contained in a route map item
+            self.repetitions = int(scn_tag[2])
+
+            print ('scenario: %s, Itemsize: %s, repetitions: %s' % (self.scenario, self.itemsize, self.repetitions))
+
+        if self.scenario == Scenario.RoutemapSizeTest:
+            self.itemnumber = int(scn_tag[1])
+            self.repetitions = int(scn_tag[2])
+
+            print('scenario: %s, Itemnumber: %s, repetitions: %s' % (self.scenario, self.itemnumber, self.repetitions))
+
+        if self.scenario == Scenario.NetworkSizeTest:
+            self.routemapnum = int(scn_tag[1])
+            self.repetitions = int(scn_tag[2])
+
+            print('scenario: %s, Route map number: %s, repetitions: %s' % (self.scenario, self.routemapnum, self.repetitions))
 
         self.neighbor = "in_neighbor"
 
-        print('scenario: %s, fieldtype :%s, repetitons:%s, filtertype: %s, routemaptype: %s, itemtype: %s' % (self.scenario, self.fieldtype,
-                                                                                                            self.repetitions, self.filtertype,
-                                                                                                              self.routemaptype, self.itemtype))
 
     def start_run(self):
         """run: Run an analysis on the loaded network model by propagating a symbolic announcement"""
@@ -112,14 +136,21 @@ class TestSuite(cmd.Cmd):
             print('You need to load a network model before you can run the symbolic execution.')
 
     def get_heading(self):
-        if self.itemtype == ItemType.MATCH:
-            return "%s, %s, %s, %s, %s, %d " % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
-                                                         self.routemaptype.name, self.filtertype.name,
-                                                      self.repetitions)
-        else:
-            return "%s, %s, %s,%d " % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
+        if self.scenario == Scenario.FieldTest:
+            if self.itemtype == ItemType.MATCH:
+                return "%s, %s, %s, %s, %s, %d " % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
+                                                             self.routemaptype.name, self.filtertype.name,
+                                                          self.repetitions)
+            else:
+                return "%s, %s, %s,%d " % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
 
-                                                      self.repetitions)
+                                                          self.repetitions)
+        if self.scenario == Scenario.ItemSizeTest:
+            return "%s, %s, %d" % (self.scenario.name, self.itemsize, self.repetitions)
+        if self.scenario == Scenario.RoutemapSizeTest:
+            return "%s, %s, %d" % (self.scenario.name, self.itemnumber, self.repetitions)
+        if self.scenario == Scenario.NetworkSizeTest:
+            return "%s, %s, %d" % (self.scenario.name, self.routemapnum, self.repetitions)
 
     def test_as_path(self, announcement):
         for announcement_element in announcement:
@@ -137,43 +168,26 @@ class TestSuite(cmd.Cmd):
                 result = announcement_element.as_path.as_path_fsm.accepts(test_as_path)
             print("test as path %s is accepted" % test_as_path)
 
+
+
     # def do_run(self, line=''):
     def do_run(self, line=''):
         # scenario: FieldTest, ItemSizeTest, RoutemapSizeTest
         # tag: FieldTest: field name (IP prefix, community, ...)
-        #      ItemSizeTest: # of items, 1, 2, 3, 4
-        #      RoutemapSizeTest: # of routemaps
+        #      ItemSizeTest: # number of matches/sets in a single item
+        #      RoutemapSizeTest: # of route map items in a single route map
+        #  of routemaps
 
-        # file_name = 'evaluation/logs/time_%s_%s_%s.log' % (scenario, self.fieldtype, '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now()))
-        if self.itemtype == ItemType.MATCH:
-            file_name = 'evaluation/logs/time_%s_%s_%s_%s_%s_%d_%s.log '% (self.scenario.name, self.fieldtype.name, self.itemtype.name,
-                                                         self.routemaptype.name, self.filtertype.name,
-                                                      self.repetitions,
-                                                           '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now()))
-            print("File name: %s_%s_%s_%s_%s_%d_%s.log "% (self.scenario.name, self.fieldtype.name, self.itemtype.name,
-                                                         self.routemaptype.name, self.filtertype.name,
-                                                      self.repetitions,
-                                                           '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now())))
-        else:
-            file_name = 'evaluation/logs/time_%s_%s_%s_%d_%s.log ' % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
 
-                                                                            self.repetitions,
-                                                                            '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now()))
-            print("File name: %s_%s_%s_%d_%s.log " % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
-
-                                                            self.repetitions,
-                                                            '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now())))
-        #
-        with open(file_name, 'w') as outfile:
-            outfile.write("%s\n" % self.get_heading())
         # create all the general state: network model, route-map etc.
-        if self.scenario == Scenario.FieldTest:
-            print("run: scenario is scenario fieldtest")
+
+        # create a topology
+        if self.scenario == Scenario.FieldTest or self.scenario == Scenario.ItemSizeTest or self.scenario == Scenario.RoutemapSizeTest:
             self.network = NetworkTopology('SingleRouterTwoNeighbors')
 
             self.network.add_community_list(["16:1", "16:2", "16:3", "16:4", "16:5", "16:6", "16:7", "16:8", "16:9", "16:10", "16:11", "16:12",
-                                            "16:13",
-                                        "16:14", "16:15", "16:16"])
+                                             "16:13",
+                                             "16:14", "16:15", "16:16"])
             tmp_router = self.network.add_internal_router('main', '10.0.0.1/32', 10)
             tmp_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
             tmp_router.add_route_map(tmp_route_map, RouteMapDirection.IN, '9.0.0.1')
@@ -191,38 +205,291 @@ class TestSuite(cmd.Cmd):
             self.network.add_peering('main', 'in_neighbor')
             self.network.add_peering('main', 'out_neighbor')
 
-        for i in range(0, self.repetitions):
-            # create all the specific things: for example the routing announcement
-            #
-            # create a match or a set routemapitem and add it to the network
-            rm_items = create_route_map_item(self.fieldtype, self.filtertype, self.routemaptype, self.itemtype)
-            tmp_route_map.clear()
-            tmp_route_map.add_item(rm_items, 10)
-            # time measurement
-            print("about to start the timer")
-            start_time = time.time()
-            # print("start_time is %d" % start_time)
 
-            # run whatever we need to measure - at the moment just some sleep
-            # random_time = random.uniform(0.0, 2.0)
-            # time.sleep(random_time)
+        if self.scenario == Scenario.NetworkSizeTest:
+            if self.routemapnum == 1:
+                self.network = NetworkTopology('SingleRouterTwoNeighbors')
+                self.network.add_community_list(["16:1", "16:2", "16:3", "16:4", "16:5", "16:6", "16:7", "16:8", "16:9", "16:10", "16:11", "16:12",
+                                                 "16:13",
+                                                 "16:14", "16:15", "16:16"])
+                tmp_router = self.network.add_internal_router('main', '10.0.0.1/32', 10)
+                tmp_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
+                tmp_router.add_route_map(tmp_route_map, RouteMapDirection.IN, '9.0.0.1')
 
-            self.start_run()
+                # route map out has zero route map items, would pass anything
+                # tmp_route_map_out = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
+                # tmp_router.add_route_map(tmp_route_map_out, RouteMapDirection.OUT, '11.0.0.1')
 
-            run_time = time.time() - start_time
-            print("finished calculating the time")
-            # tmp_stats = TimingStats(scenario, i, run_time)
+                # add all neighboring routers that advertise and receive routes
+                self.network.add_external_router('in_neighbor', '9.0.0.1', 9)
+                self.network.add_external_router('out_neighbor', '11.0.0.1', 11)
+
+                # add the connections between the routers (e.g., full mesh between internal routers and a connection between
+                # external routers and their specific counterpart internally
+                self.network.add_peering('main', 'in_neighbor')
+                self.network.add_peering('main', 'out_neighbor')
+
+            if self.routemapnum == 2:
+                self.network = NetworkTopology('SingleRouterTwoNeighborswith2Routemaps')
+                self.network.add_community_list(["16:1", "16:2", "16:3", "16:4", "16:5", "16:6", "16:7", "16:8", "16:9", "16:10", "16:11", "16:12",
+                                                 "16:13",
+                                                 "16:14", "16:15", "16:16"])
+                tmp_router = self.network.add_internal_router('main', '10.0.0.1/32', 10)
+                tmp_route_map = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
+                tmp_router.add_route_map(tmp_route_map, RouteMapDirection.IN, '9.0.0.1')
+
+                # route map out has zero route map items, would pass anything
+                tmp_route_map_out = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
+                tmp_router.add_route_map(tmp_route_map_out, RouteMapDirection.OUT, '11.0.0.1')
+
+                # add all neighboring routers that advertise and receive routes
+                self.network.add_external_router('in_neighbor', '9.0.0.1', 9)
+                self.network.add_external_router('out_neighbor', '11.0.0.1', 11)
+
+                # add the connections between the routers (e.g., full mesh between internal routers and a connection between
+                # external routers and their specific counterpart internally
+                self.network.add_peering('main', 'in_neighbor')
+                self.network.add_peering('main', 'out_neighbor')
+
+            if self.routemapnum == 4:
+                print("prepare network for 4 routemaps")
+                self.network = NetworkTopology('TwoRouterTwoNeighborswith4Routemaps')
+                self.network.add_community_list(["16:1", "16:2", "16:3", "16:4", "16:5", "16:6", "16:7", "16:8", "16:9", "16:10", "16:11", "16:12",
+                                                 "16:13",
+                                                 "16:14", "16:15", "16:16"])
+                tmp_router1 = self.network.add_internal_router('main1', '10.0.0.1/32', 10)
+
+                tmp_router2 = self.network.add_internal_router('main2', '10.0.0.2/32', 10)
+
+                tmp_route_map1 = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
+                tmp_router1.add_route_map(tmp_route_map1, RouteMapDirection.IN, '9.0.0.1')
+
+                # route map out has zero route map items, would pass anything
+                tmp_route_map_out1 = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
+                tmp_router1.add_route_map(tmp_route_map_out1, RouteMapDirection.OUT, '10.0.0.2')
+
+                tmp_route_map2 = RouteMap('IMPORT_FILTER', RouteMapType.PERMIT)
+                tmp_router2.add_route_map(tmp_route_map2, RouteMapDirection.IN, '10.0.0.1')
+
+                # route map out has zero route map items, would pass anything
+                tmp_route_map_out2 = RouteMap('EXPORT_FILTER', RouteMapType.PERMIT)
+                tmp_router2.add_route_map(tmp_route_map_out2, RouteMapDirection.OUT, '11.0.0.1')
+
+
+                # add all neighboring routers that advertise and receive routes
+                self.network.add_external_router('in_neighbor', '9.0.0.1', 9)
+                self.network.add_external_router('out_neighbor', '11.0.0.1', 11)
+
+                # add the connections between the routers (e.g., full mesh between internal routers and a connection between
+                # external routers and their specific counterpart internally
+                self.network.add_peering('main1', 'in_neighbor')
+                self.network.add_peering('main1', 'main2')
+                self.network.add_peering('main2', 'out_neighbor')
+
+
+        if self.scenario == Scenario.FieldTest:
+            print("run: scenario is scenario fieldtest")
+
+            # file_name = 'evaluation/logs/time_%s_%s_%s.log' % (scenario, self.fieldtype, '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now()))
             if self.itemtype == ItemType.MATCH:
+                file_name = 'evaluation/logs/time_%s_%s_%s_%s_%s_%d_%s.log ' % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
+                                                                                self.routemaptype.name, self.filtertype.name,
+                                                                                self.repetitions,
+                                                                                '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now()))
+                print("File name: %s_%s_%s_%s_%s_%d_%s.log " % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
+                                                                self.routemaptype.name, self.filtertype.name,
+                                                                self.repetitions,
+                                                                '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now())))
+            else:
+                file_name = 'evaluation/logs/time_%s_%s_%s_%d_%s.log ' % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
+
+                                                                          self.repetitions,
+                                                                          '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now()))
+                print("File name: %s_%s_%s_%d_%s.log " % (self.scenario.name, self.fieldtype.name, self.itemtype.name,
+
+                                                          self.repetitions,
+                                                          '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now())))
+            #
+            # with open(file_name, 'w') as outfile:
+            #     outfile.write("%s\n" % self.get_heading())
+
+            for i in range(0, self.repetitions):
+                # create all the specific things: for example the routing announcement
+                #
+                # create a match or a set routemapitem and add it to the network
+                rm_items = create_route_map_item(self.fieldtype, self.filtertype, self.routemaptype, self.itemtype)
+                tmp_route_map.clear()
+                tmp_route_map.add_item(rm_items, 10)
+                # time measurement
+                print("about to start the timer")
+                start_time = time.time()
+                # print("start_time is %d" % start_time)
+
+                # run whatever we need to measure - at the moment just some sleep
+                # random_time = random.uniform(0.0, 2.0)
+                # time.sleep(random_time)
+
+                self.start_run()
+
+                run_time = time.time() - start_time
+                print("finished calculating the time")
+                # tmp_stats = TimingStats(scenario, i, run_time)
+                if self.itemtype == ItemType.MATCH:
+                    # with open(file_name, 'a') as outfile:
+                    #     outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.matches[0].pattern))
+                    print(i, run_time, rm_items.matches[0].pattern)
+                if self.itemtype == ItemType.SET:
+                    # with open(file_name, 'a') as outfile:
+                    #     outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.actions[0].pattern))
+                    print(i, run_time, rm_items.actions[0].pattern)
+
+        if self.scenario == Scenario.ItemSizeTest:
+            # pick match, set field
+            match_options = [RouteAnnouncementFields.IP_PREFIX, RouteAnnouncementFields.NEXT_HOP, RouteAnnouncementFields.AS_PATH,
+                             RouteAnnouncementFields.COMMUNITIES, RouteAnnouncementFields.MED]
+
+            set_options = [RouteAnnouncementFields.LOCAL_PREF, RouteAnnouncementFields.NEXT_HOP, RouteAnnouncementFields.AS_PATH,
+                             RouteAnnouncementFields.COMMUNITIES, RouteAnnouncementFields.MED]
+            # incrementally add a match then a set, so the number of matches are always 1 more or equal to the set operation
+            number_set = int(self.itemsize/2) # 5/2 = 2
+            number_match = self.itemsize - number_set
+
+            print("going to generate %s number of matches and %s number of set " % (number_match, number_set))
+
+            file_name = 'evaluation/logs/time_%s_%s_%s_%s.log' % (self.scenario, self.itemsize, self.repetitions, '{:%Y%m%d-%H%M%S}'.format(
+            datetime.datetime.now()))
+            print("file name:%s" % file_name)
+            with open(file_name, 'w') as outfile:
+                outfile.write("%s\n" % self.get_heading())
+            print ("Heading: %s\n" % self.get_heading())
+            for i in range(0, self.repetitions):
+                tmp_route_map.clear()
+
+                match_field_index = random.sample(range(0, 5), number_match)  # pick from 0, 1, 2, 3, 4
+                set_field_index = random.sample(range(0, 5), number_set)
+                # print("match field index is %s and set_field_index is %s" % (",".join(match_field_index), ",".join(set_field_index)))
+                match_field = list()
+                set_field = list()
+
+                match_field_name = list()
+                set_field_name = list()
+                for m in match_field_index:
+                    match_field.append(match_options[m])
+                    match_field_name.append(match_options[m].name)
+                    print("adding match field index %d" % m)
+                for s in set_field_index:
+                    set_field.append(set_options[s])
+                    set_field_name.append(set_options[s].name)
+                    print("adding set field index %d" % s)
+                # pick a type for the item
+
+                itempermittype = route_map_random() # pick permit or Deny
+                rm_items = RouteMapItems(itempermittype)
+                print("rm item type %s " % rm_items.type)
+                # add match to the item
+                for m in match_field:
+                    create_a_match_or_set(m, ItemType.MATCH, rm_items)
+
+                for s in set_field:
+                    create_a_match_or_set(s, ItemType.SET, rm_items)
+
+                tmp_route_map.add_item(rm_items, 10)
+                # time measurement
+                print("about to start the timer")
+                start_time = time.time()
+                # print("start_time is %d" % start_time)
+
+                self.start_run()
+
+                run_time = time.time() - start_time
+                print("finished calculating the time")
+                operation_fields = ",".join(match_field_name) +"&" +",".join(set_field_name)
+
                 with open(file_name, 'a') as outfile:
-                    outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.matches[0].pattern))
-                print(i, run_time, rm_items.matches[0].pattern)
-            if self.itemtype == ItemType.SET:
+                    outfile.write("%s,%s,%s\n" % (i,  run_time, operation_fields))
+                #print(i, run_time, ",".join(match_field_name), ",".join(set_field_name), operation_fields)
+
+        if self.scenario == Scenario.RoutemapSizeTest:
+            # self.itemnumber, self.repetitions
+            file_name = 'evaluation/logs/time_%s_%s_%s_%s.log' % (self.scenario, self.itemnumber, self.repetitions, '{:%Y%m%d-%H%M%S}'.format(
+                datetime.datetime.now()))
+            print("file name:%s" % file_name)
+            with open(file_name, 'w') as outfile:
+                outfile.write("%s\n" % self.get_heading())
+            print("Heading: %s\n" % self.get_heading())
+            for i in range(0, self.repetitions):
+                tmp_route_map.clear()
+                operation_type = list()
+                for s in range(0, self.itemnumber):
+                    item = create_route_map_item(None, None, None, None)
+                    tmp_route_map.add_item(item, (s+1)*10 )
+
+                    operation_type.append(item.type.name)
+                    print("add route map item with seq %s to route map with type %s" % ((s+1)*10, item.type))
+
+                start_time = time.time()
+                # print("start_time is %d" % start_time)
+
+                self.start_run()
+
+                run_time = time.time() - start_time
+                print("finished calculating the time")
                 with open(file_name, 'a') as outfile:
-                    outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.actions[0].pattern))
-                print(i, run_time, rm_items.actions[0].pattern)
+                    outfile.write("%s,%s,%s\n" % (i, run_time, "_".join(operation_type)))
+                print(i, run_time, "_".join(operation_type))
 
             # if i % 10 == 0:
             #     logger.info('Done with iteration %d out of %d' % (i + 1, repetitions))
+
+        if self.scenario == Scenario.NetworkSizeTest:
+            file_name = 'evaluation/logs/time_%s_%s_%s_%s.log' % (self.scenario, self.routemapnum, self.repetitions, '{:%Y%m%d-%H%M%S}'.format(
+                datetime.datetime.now()))
+            print("file name:%s" % file_name)
+            with open(file_name, 'w') as outfile:
+                outfile.write("%s\n" % self.get_heading())
+            print("Heading: %s\n" % self.get_heading())
+            for i in range(0, self.repetitions):
+                if self.routemapnum == 1:
+                    tmp_route_map.clear()
+                    item1 = create_route_map_item(None, None, None, None)
+                    tmp_route_map.add_item(item1, 10)
+
+                if self.routemapnum == 2:
+                    tmp_route_map.clear()
+                    tmp_route_map_out.clear()
+                    item1 = create_route_map_item(None, None, None, None)
+                    item2 = create_route_map_item(None, None, None, None)
+                    tmp_route_map.add_item(item1, 10)
+                    tmp_route_map_out.add_item(item2, 10)
+
+                if self.routemapnum == 4:
+                    print("going to add 4 items to 4 route maps ")
+                    tmp_route_map1.clear()
+                    tmp_route_map_out1.clear()
+                    tmp_route_map2.clear()
+                    tmp_route_map_out2.clear()
+
+                    item1 = create_route_map_item(None, None, None, None)
+                    item2 = create_route_map_item(None, None, None, None)
+                    item3 = create_route_map_item(None, None, None, None)
+                    item4 = create_route_map_item(None, None, None, None)
+                    tmp_route_map1.add_item(item1, 10)
+                    tmp_route_map_out1.add_item(item2, 10)
+                    tmp_route_map2.add_item(item3, 10)
+                    tmp_route_map_out2.add_item(item4, 10)
+
+
+                start_time = time.time()
+                print("start_time is %d" % start_time)
+
+                self.start_run()
+
+                run_time = time.time() - start_time
+                print("finished calculating the time")
+                with open(file_name, 'a') as outfile:
+                    outfile.write("%s,%s\n" % (i, run_time))
+                print(i, run_time)
+
 
         logger.info('Done with everything')
 
@@ -250,10 +517,9 @@ class TestSuite(cmd.Cmd):
 #
 #     return field, pattern, filtertype, routemaptype, itemtype
 
+def create_a_match_or_set(field, itemtype, rm_items):
+    routemaptype = route_map_random()  # permit or deny
 
-def create_route_map_item(field, filtertype_p, routemaptype_p, itemtype_p):
-    itemtype = item_type_random(itemtype_p) # match or action
-    rm_items = RouteMapItems()
     if field == RouteAnnouncementFields.IP_PREFIX or field == RouteAnnouncementFields.NEXT_HOP:
         pattern_ip = ip_network_random()
         print("enter create route map item")
@@ -261,10 +527,11 @@ def create_route_map_item(field, filtertype_p, routemaptype_p, itemtype_p):
         pattern = SymbolicField.create_from_prefix(pattern_ip, RouteAnnouncementFields.IP_PREFIX)
 
         if itemtype == ItemType.MATCH: # match ip prefix or next hop
-            filtertype = filter_type_random(filtertype_p) # GE or LE or EQUAL, next hop needs to be GE
-            routemaptype = route_map_random(routemaptype_p) # permit or deny
+            filtertype = filter_type_random() # GE or LE or EQUAL, next hop needs to be GE
+            # routemaptype = route_map_random(routemaptype_p) # permit or deny
             print("add match: routemaptype: %s, routeannoucementfields: %s, pattern_ip:%s, filtertype:%s" % (
                 routemaptype, field, pattern, filtertype))
+
             rm_items.add_match(routemaptype, field, pattern, filtertype)
         else:
             # set next hop
@@ -277,7 +544,106 @@ def create_route_map_item(field, filtertype_p, routemaptype_p, itemtype_p):
         if itemtype == ItemType.MATCH:
             pattern = AS_PATH_regex_random()
             filtertype = filter_type_random(FilterType.GE) # doesnt really matter for as path
-            routemaptype = route_map_random(routemaptype_p)  # permit or deny
+            # routemaptype = route_map_random(routemaptype_p)  # permit or deny
+            print("add match: routemaptype: %s, routeannoucementfields: %s, pattern_ip:%s, filtertype:%s" % (
+                routemaptype, field, pattern, filtertype))
+            rm_items.add_match(routemaptype, field, pattern, filtertype)
+        else:
+            #  rm_items.add_action(RouteAnnouncementFields.AS_PATH, " 324 324")
+            asn_rep = random.randint(1, 16)
+            asn = random.randint(1, 65535)
+            pattern = (str(asn) + " ") * asn_rep
+
+            print("add action: routeannoucementfields: %s, pattern:%s" % (field, pattern))
+            rm_items.add_action(field, pattern)
+
+    if field == RouteAnnouncementFields.COMMUNITIES:
+        community_list = ["16:1", "16:2", "16:3", "16:4", "16:5", "16:6", "16:7", "16:8", "16:9", "16:10", "16:11", "16:12",
+                                            "16:13",
+                                        "16:14", "16:15", "16:16"]
+        # randomly chooses x = comm_num of communities to match
+        comm_num = random.randint(1, 16)
+        # print ("comm #: %s" % comm_num)
+        # the index are randomly chosen and put in a list
+        community_index_list = random.sample(range(0, 16), comm_num)
+
+        # in this case the pattern is a list
+        pattern = list()
+        # print("community_index_list: %s" % ",".join(community_index_list))
+        for i in community_index_list:
+            pattern.append(community_list[i])
+        # print("community pattern to be matched is %s" % ", ".join(pattern))
+        if itemtype == ItemType.MATCH:
+            filtertype = filter_type_random()  # GE or LE or EQUAL, next hop needs to be GE
+            # routemaptype = route_map_random(routemaptype_p)  # permit or deny
+            rm_items.add_match(routemaptype, field, pattern, filtertype)
+        if itemtype == ItemType.SET:
+            rm_items.add_action(field, pattern)
+
+    if field == RouteAnnouncementFields.LOCAL_PREF:
+        if itemtype == ItemType.MATCH:
+            print ("Error: can't match on local pref, SET operation only. ")
+        else:
+            rm_items.add_action(field, random.randint(1, 1000))
+
+    if field == RouteAnnouncementFields.MED:
+        pattern = random.randint(1, 1000)
+        if itemtype == ItemType.MATCH:
+            filtertype = FilterType.EQUAL # doesn't matter actually
+            # routemaptype = route_map_random(routemaptype_p)
+            print("add match: routemaptype: %s, routeannoucementfields: %s, pattern_ip:%s, filtertype:%s" % (
+                routemaptype, field, pattern, filtertype))
+            rm_items.add_match(routemaptype, field, pattern, filtertype)
+        else:
+
+            print("add action: routeannoucementfields: %s, pattern:%s" % (field, pattern))
+
+            rm_items.add_action(field, pattern)
+
+    return
+
+def create_route_map_item(field, filtertype_p, routemaptype_p, itemtype_p):
+    itemtype = item_type_random(itemtype_p) # match or action
+
+    routemaptype = route_map_random(routemaptype_p) # permit or deny
+    rm_items = RouteMapItems(routemaptype)
+
+    if field == None:
+        field_index = random.randint(0,5)
+        field_list = [RouteAnnouncementFields.LOCAL_PREF, RouteAnnouncementFields.NEXT_HOP, RouteAnnouncementFields.AS_PATH,
+                             RouteAnnouncementFields.COMMUNITIES, RouteAnnouncementFields.MED, RouteAnnouncementFields.LOCAL_PREF]
+        field = field_list[field_index]
+        # for randomly generate a match or an action make sure the type is correct
+        if field == RouteAnnouncementFields.LOCAL_PREF:
+            itemtype = ItemType.SET
+        if field == RouteAnnouncementFields.IP_PREFIX:
+            itemtype = ItemType.MATCH
+        print("chosen field for route map item is %s" % field.name)
+    if field == RouteAnnouncementFields.IP_PREFIX or field == RouteAnnouncementFields.NEXT_HOP:
+        pattern_ip = ip_network_random()
+        print("enter create route map item")
+
+        pattern = SymbolicField.create_from_prefix(pattern_ip, RouteAnnouncementFields.IP_PREFIX)
+
+        if itemtype == ItemType.MATCH: # match ip prefix or next hop
+            filtertype = filter_type_random(filtertype_p) # GE or LE or EQUAL, next hop needs to be GE
+            # routemaptype = route_map_random(routemaptype_p) # permit or deny
+            print("add match: routemaptype: %s, routeannoucementfields: %s, pattern_ip:%s, filtertype:%s" % (
+                routemaptype, field, pattern, filtertype))
+
+            rm_items.add_match(routemaptype, field, pattern, filtertype)
+        else:
+            # set next hop
+            print("add action: routeannoucementfields: %s, pattern:%s" % (field, pattern))
+
+            rm_items.add_action(RouteAnnouncementFields.NEXT_HOP, pattern.str_ip_prefix)
+
+    if field == RouteAnnouncementFields.AS_PATH:
+
+        if itemtype == ItemType.MATCH:
+            pattern = AS_PATH_regex_random()
+            filtertype = filter_type_random(FilterType.GE) # doesnt really matter for as path
+            # routemaptype = route_map_random(routemaptype_p)  # permit or deny
             print("add match: routemaptype: %s, routeannoucementfields: %s, pattern_ip:%s, filtertype:%s" % (
                 routemaptype, field, pattern, filtertype))
             rm_items.add_match(routemaptype, field, pattern, filtertype)
@@ -308,22 +674,25 @@ def create_route_map_item(field, filtertype_p, routemaptype_p, itemtype_p):
         # print("community pattern to be matched is %s" % ", ".join(pattern))
         if itemtype == ItemType.MATCH:
             filtertype = filter_type_random(filtertype_p)  # GE or LE or EQUAL, next hop needs to be GE
-            routemaptype = route_map_random(routemaptype_p)  # permit or deny
+            # routemaptype = route_map_random(routemaptype_p)  # permit or deny
             rm_items.add_match(routemaptype, field, pattern, filtertype)
+            print ("add match for community")
         if itemtype == ItemType.SET:
             rm_items.add_action(field, pattern)
-
+            print("add action for community")
     if field == RouteAnnouncementFields.LOCAL_PREF:
         if itemtype == ItemType.MATCH:
             print ("Error: can't match on local pref, SET operation only. ")
         else:
-            rm_items.add_action(field, random.randint(1, 1000))
+            pattern = random.randint(1, 1000)
+            rm_items.add_action(field, pattern)
+            print("add action: routeannoucementfields: %s, pattern:%s" % (field, pattern))
 
     if field == RouteAnnouncementFields.MED:
         pattern = random.randint(1, 1000)
         if itemtype == ItemType.MATCH:
             filtertype = FilterType.EQUAL # doesn't matter actually
-            routemaptype = route_map_random(routemaptype_p)
+            # routemaptype = route_map_random(routemaptype_p)
             print("add match: routemaptype: %s, routeannoucementfields: %s, pattern_ip:%s, filtertype:%s" % (
                 routemaptype, field, pattern, filtertype))
             rm_items.add_match(routemaptype, field, pattern, filtertype)
@@ -334,7 +703,9 @@ def create_route_map_item(field, filtertype_p, routemaptype_p, itemtype_p):
             rm_items.add_action(field, pattern)
 
 
+
     return rm_items
+
 
 
 def AS_PATH_regex_random():
