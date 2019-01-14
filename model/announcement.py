@@ -190,7 +190,7 @@ class RouteAnnouncement(object):
             community_deny_str = ", ".join(community_deny_list)
 
         return 'IP Prefix: %s, %s, IP Deny: %s, Next Hop: %s, Next Hop Deny: %s, Local Pref: %s, Med: %s, Med Deny: %s, Community: %s, ' \
-               'Community_deny: %s, AS Path: %s\n' % (self.ip_prefix,self.ip_prefix.prefix_mask,mask_ip_list_str, self.next_hop,
+               'Community_deny: %s, AS Path: %s' % (self.ip_prefix,self.ip_prefix.prefix_mask,mask_ip_list_str, self.next_hop,
                                                      mask_next_hop_list_str,
             self.local_pref, self.med, med_str, self.communities, community_deny_str, ",".join(self.as_path.as_path_list))
 

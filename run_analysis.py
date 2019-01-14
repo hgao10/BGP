@@ -133,10 +133,13 @@ class TestSuite(cmd.Cmd):
             outcome = self.network.propagate_announcement(self.neighbor, None, self.network.AS_community_list)
 
             output = 'From %s the following announcements make it through to the other neighbors:\n\n' % (self.neighbor, )
-            for neighbor, announcement in outcome.items():
+            for neighbor, announcements in sorted(outcome.items(), key=lambda x: x[0]):
                 neighbor_id = self.network.get_router_id(neighbor)
 
-                output += '\t%s (%s): %s\n' % (neighbor, neighbor_id, announcement)
+                output += '\t%s (%s):\n' % (neighbor, neighbor_id)
+
+                for i, announcement in enumerate(announcements):
+                    output += '\t\t(%d): %s\n' % (i + 1, announcement)
 
                 # Disable as path testing during time measurement
                 # self.test_as_path(announcement)
