@@ -176,7 +176,7 @@ class TestSuite(cmd.Cmd):
         # tag: FieldTest: field name (IP prefix, community, ...)
         #      ItemSizeTest: # number of matches/sets in a single item
         #      RoutemapSizeTest: # of route map items in a single route map
-        #  of routemaps
+        #       NetworkSizeTest: # of route maps in a network: 1, 2, 4
 
 
         # create all the general state: network model, route-map etc.
@@ -309,9 +309,9 @@ class TestSuite(cmd.Cmd):
 
                                                           self.repetitions,
                                                           '{:%Y%m%d-%H%M%S}'.format(datetime.datetime.now())))
-            #
-            # with open(file_name, 'w') as outfile:
-            #     outfile.write("%s\n" % self.get_heading())
+
+            with open(file_name, 'w') as outfile:
+                outfile.write("%s\n" % self.get_heading())
 
             for i in range(0, self.repetitions):
                 # create all the specific things: for example the routing announcement
@@ -335,12 +335,12 @@ class TestSuite(cmd.Cmd):
                 print("finished calculating the time")
                 # tmp_stats = TimingStats(scenario, i, run_time)
                 if self.itemtype == ItemType.MATCH:
-                    # with open(file_name, 'a') as outfile:
-                    #     outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.matches[0].pattern))
+                    with open(file_name, 'a') as outfile:
+                        outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.matches[0].pattern))
                     print(i, run_time, rm_items.matches[0].pattern)
                 if self.itemtype == ItemType.SET:
-                    # with open(file_name, 'a') as outfile:
-                    #     outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.actions[0].pattern))
+                    with open(file_name, 'a') as outfile:
+                        outfile.write("%s,%s,%s\n" % (i,  run_time, rm_items.actions[0].pattern))
                     print(i, run_time, rm_items.actions[0].pattern)
 
         if self.scenario == Scenario.ItemSizeTest:
