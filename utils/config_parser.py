@@ -45,6 +45,8 @@ def load_network_from_configs(config_path, scenario_name=""):
     peerings = dict()
     communities = set()  # set of all communities that somehow appear in the configs
 
+    num_external_routers = 0
+
     network = NetworkTopology(scenario_name)
 
     for config in configs:
@@ -88,9 +90,10 @@ def load_network_from_configs(config_path, scenario_name=""):
         peerings[router_name] = local_peerings
 
         # add external routers
-        for i, external_router in enumerate(external_routers):
+        for external_router in external_routers:
             neighbor_ip, neighbor_asn = external_router
-            network.add_external_router('ext_router_%d' % i, neighbor_ip, neighbor_asn)
+            network.add_external_router('ext_router_%d' % num_external_routers, neighbor_ip, neighbor_asn)
+            num_external_routers += 1
 
         # output for debugging
         logger.debug(
